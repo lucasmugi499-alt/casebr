@@ -32,7 +32,7 @@ export default function ManagementDashboard() {
   const { user } = useAuth();
 
   return (
-    <AuthGuard allowedRoles={["Manager", "Admin"]}>
+    <AuthGuard allowedRoles={["manager", "admin"]}>
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Management Dashboard</h2>

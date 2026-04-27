@@ -24,7 +24,7 @@ export default function ClientProfilePage() {
   const clientId = params.id as string;
 
   return (
-    <AuthGuard allowedRoles={["Caseworker", "SSA", "Manager"]}>
+    <AuthGuard allowedRoles={["caseworker", "ssa", "manager"]}>
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>

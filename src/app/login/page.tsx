@@ -34,7 +34,7 @@ export default function LoginPage() {
             email: email,
             firstName: email.split('@')[0],
             lastName: "",
-            role: "Caseworker", // Default role
+            role: "caseworker", // Default role
             status: "active",
             createdAt: new Date().toISOString()
           });
@@ -56,10 +56,10 @@ export default function LoginPage() {
       if (userDoc && userDoc.exists()) {
         const userData = userDoc.data() as User;
         if (!isSignUp) toast.success(`Welcome back, ${userData.firstName}`);
-        if (userData.role === "Caseworker") router.push("/dashboard");
-        else if (userData.role === "SSA") router.push("/team");
-        else if (userData.role === "Manager") router.push("/management");
-        else if (userData.role === "Admin") router.push("/admin/users");
+        if (userData.role === "caseworker") router.push("/dashboard");
+        else if (userData.role === "ssa") router.push("/team");
+        else if (userData.role === "manager") router.push("/management");
+        else if (userData.role === "admin") router.push("/admin/users");
         else router.push("/dashboard"); // Fallback
       } else {
         // Fallback for demo if no custom doc

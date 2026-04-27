@@ -16,7 +16,7 @@ export default function TeamDashboard() {
   const { user } = useAuth();
 
   return (
-    <AuthGuard allowedRoles={["SSA", "Manager", "Admin"]}>
+    <AuthGuard allowedRoles={["ssa", "manager", "admin"]}>
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Team Overview</h2>

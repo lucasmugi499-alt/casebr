@@ -17,7 +17,7 @@ export default function CaseworkerDashboard() {
   const { user } = useAuth();
 
   return (
-    <AuthGuard allowedRoles={["Caseworker"]}>
+    <AuthGuard allowedRoles={["caseworker"]}>
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Welcome back, {user?.firstName}</h2>

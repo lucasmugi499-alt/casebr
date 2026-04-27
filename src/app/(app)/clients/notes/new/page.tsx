@@ -64,7 +64,7 @@ export default function NewCaseNote() {
   };
 
   return (
-    <AuthGuard allowedRoles={["Caseworker", "SSA"]}>
+    <AuthGuard allowedRoles={["caseworker", "ssa"]}>
       <div className="max-w-3xl mx-auto space-y-6">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">New Case Note</h2>

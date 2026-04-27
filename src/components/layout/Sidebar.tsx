@@ -49,9 +49,9 @@ export function Sidebar() {
   ];
 
   let navigation = caseworkerNav;
-  if (user.role === "SSA") navigation = ssaNav;
-  if (user.role === "Manager") navigation = managerNav;
-  if (user.role === "Admin") navigation = adminNav;
+  if (user.role === "ssa") navigation = ssaNav;
+  if (user.role === "manager") navigation = managerNav;
+  if (user.role === "admin") navigation = adminNav;
 
   return (
     <div className="flex h-full w-64 flex-col bg-white border-r border-slate-200">

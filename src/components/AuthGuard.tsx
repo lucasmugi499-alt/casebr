@@ -21,10 +21,10 @@ export default function AuthGuard({
         router.push("/login");
       } else if (user && allowedRoles && !allowedRoles.includes(user.role)) {
         // Redirect unauthorized users to their correct dashboard based on role
-        if (user.role === "Caseworker") router.push("/dashboard");
-        else if (user.role === "SSA") router.push("/team");
-        else if (user.role === "Manager") router.push("/management");
-        else if (user.role === "Admin") router.push("/admin/users");
+        if (user.role === "caseworker") router.push("/dashboard");
+        else if (user.role === "ssa") router.push("/team");
+        else if (user.role === "manager") router.push("/management");
+        else if (user.role === "admin") router.push("/admin/users");
       }
     }
   }, [user, firebaseUser, loading, router, allowedRoles]);
