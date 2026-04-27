@@ -1,10 +1,16 @@
-# CaseBridge MVP
+# CaseBridge
 
-CaseBridge is a shelter casework operating system for caseworkers, SSA/supervisors, managers, and admins.
+CaseBridge is a shelter casework operating system for caseworkers, SSAs, managers, and admins.
 
-## Requirements
+## 1) Environment setup
 
-Create `.env.local` with:
+Create a local env file:
+
+```bash
+cp .env.example .env.local # if you keep an example file
+```
+
+Populate `.env.local` with Firebase client keys and Admin SDK credentials:
 
 ```bash
 NEXT_PUBLIC_FIREBASE_API_KEY=
@@ -13,50 +19,98 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
-GEMINI_API_KEY=
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
+
+# Option A: full JSON string
 FIREBASE_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}'
-NEXT_PUBLIC_BOOTSTRAP_ADMIN_EMAIL=admin@your-org.org
-NEXT_PUBLIC_BOOTSTRAP_ADMIN_UID=
+
+# Option B: split values
+# FIREBASE_PROJECT_ID=
+# FIREBASE_CLIENT_EMAIL=
+# FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"
+
+GEMINI_API_KEY=
+DEMO_USER_PASSWORD=
 ```
 
-## Login setup (simple flow)
+> ⚠️ Never commit `.env.local` to source control.
 
-- Create your own Firebase Auth user for the admin email first.
-- Set `NEXT_PUBLIC_BOOTSTRAP_ADMIN_EMAIL` to that same email **or** set `NEXT_PUBLIC_BOOTSTRAP_ADMIN_UID` to the Firebase Auth UID you want to bootstrap as admin.
-- First login with the matching bootstrap email/UID auto-creates the admin profile in `users`.
-- After that, staff accounts should only log in after an admin creates their profile and assigns a role.
-
-## Run locally
+## 2) Run the app
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Seed demo data
+Open `http://localhost:3000`.
 
-The repository includes `scripts/seed-demo-data.ts` for realistic fictional shelter data:
+## 3) First-admin setup flow (`/setup`)
 
-- 1 organization
-- 2 sites
-- 1 admin
-- 1 manager
-- 1 SSA
-- 4 caseworkers
-- 15 clients with notes, tasks, referrals, risk flags, safety plans, supervisor reviews, and audit logs
+For a brand-new Firebase project:
 
-Run:
+1. Open `/setup`.
+2. Enter first name, last name, email, password, organization name, and primary site name.
+3. CaseBridge server-side setup (Firebase Admin SDK) creates:
+   - Firebase Auth user
+   - organization
+   - site
+   - admin staff profile at `users/{uid}`
+   - audit log (`setup_complete`)
+4. After setup, `/setup` is locked and displays: **"Setup is already complete. Please log in."**
+
+## 4) Login behavior (`/login`)
+
+- Public sign-up is disabled.
+- Login only uses Firebase Auth sign-in.
+- If auth succeeds but `users/{uid}` does not exist, login is denied.
+- If `users/{uid}` exists but status is inactive, login is denied.
+- Active users are routed by role:
+  - caseworker → `/dashboard`
+  - ssa → `/team`
+  - manager → `/management`
+  - admin → `/admin/users`
+
+## 5) Admin creates staff
+
+Admins create staff from `/admin/users`.
+
+Creation is server-side through Firebase Admin SDK and writes:
+
+- Firebase Auth user
+- Firestore profile at `users/{newAuthUid}`
+- audit log (`create_user`)
+
+Staff profile IDs **must** match Firebase Auth UIDs.
+
+## 6) Seed demo data (server-side only)
+
+Use the script (not browser seeding):
 
 ```bash
-npx tsx scripts/seed-demo-data.ts
+npm run seed
 ```
 
-## Current MVP workflows
+It creates:
 
-- Role-based login and route access
-- Firestore-backed caseworker dashboard and client list
-- Client profile with timeline activity
-- AI-assisted case-note workflow at `/clients/[id]/notes/new`
-- Optional task/referral/risk creation from note save
-- Audit log writes for sensitive service operations
-- Firestore rules + index baseline
+- 1 organization (`org_casebridge_demo`)
+- 2 sites (`site_downtown`, `site_east`)
+- Firebase Auth + Firestore profiles for:
+  - `admin@casebridge.demo`
+  - `manager@casebridge.demo`
+  - `ssa@casebridge.demo`
+  - `caseworker1@casebridge.demo`
+  - `caseworker2@casebridge.demo`
+  - `caseworker3@casebridge.demo`
+  - `caseworker4@casebridge.demo`
+- demo clients, notes, tasks, referrals, risk flags, safety plans, supervisor reviews, audit logs
+
+Password source:
+
+- Uses `DEMO_USER_PASSWORD` from env
+- Development-only fallback: `CaseBridgeDemo123!`
+
+## 7) Data model rule
+
+`users/{uid}` document ID must always equal the Firebase Auth UID for that user.
+
+Do **not** create fake Firestore IDs for users unless Auth UID is exactly the same.
