@@ -4,7 +4,7 @@ import { useState } from "react";
 import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/client";
 import { useRouter } from "next/navigation";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, limit, query, setDoc, where } from "firebase/firestore";
 import { User } from "@/types";
 import { getHomeRouteForRole } from "@/lib/auth/roleRouting";
 import { Button } from "@/components/ui/button";
@@ -45,8 +45,16 @@ export default function LoginPage() {
       const normalizedEmail = email.trim().toLowerCase();
       const isBootstrapAdminByEmail = Boolean(bootstrapAdminEmail && normalizedEmail === bootstrapAdminEmail);
       const isBootstrapAdminByUid = Boolean(bootstrapAdminUid && userCredential.user.uid === bootstrapAdminUid);
+      let isFirstAdminBootstrap = false;
 
-      if (isBootstrapAdminByEmail || isBootstrapAdminByUid) {
+      try {
+        const adminsSnapshot = await getDocs(query(collection(db, "users"), where("role", "==", "admin"), limit(1)));
+        isFirstAdminBootstrap = adminsSnapshot.empty;
+      } catch (firestoreError) {
+        console.warn("Could not check existing admins. Skipping first-admin bootstrap fallback.", firestoreError);
+      }
+
+      if (isBootstrapAdminByEmail || isBootstrapAdminByUid || isFirstAdminBootstrap) {
         const newAdmin: User = {
           id: userCredential.user.uid,
           organizationId: "org_casebridge_demo",
@@ -62,7 +70,11 @@ export default function LoginPage() {
         };
 
         await setDoc(doc(db, "users", userCredential.user.uid), newAdmin);
-        toast.success("Admin profile ready. You can now create staff accounts and roles.");
+        toast.success(
+          isFirstAdminBootstrap
+            ? "No admin profile existed yet, so this account was promoted to admin. You can now create staff accounts and roles."
+            : "Admin profile ready. You can now create staff accounts and roles."
+        );
         router.push("/admin/users");
         return;
       }
