@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function role() {
+      return signedIn() ? userDoc().data.role : null;
+    }
+
+    function orgId() {
+      return signedIn() ? userDoc().data.organizationId : null;
+    }
+
+    function siteIds() {
+      return signedIn() ? userDoc().data.siteIds : [];
+    }
+
+    function sameOrg(resourceOrgId) {
+      return signedIn() && resourceOrgId == orgId();
+    }
+
+    function isAdmin() {
+      return role() == 'admin';
+    }
+
+    function isManager() {
+      return role() == 'manager' || isAdmin();
+    }
+
+    function isSupervisor() {
+      return role() == 'ssa' || isManager();
+    }
+
+    function sameSite(siteId) {
+      return siteId in siteIds() || isManager();
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && (isAdmin() || userId == request.auth.uid || isSupervisor());
+      allow create: if signedIn() && userId == request.auth.uid;
+      allow delete: if isAdmin();
+      allow update: if isAdmin() || (
+        userId == request.auth.uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.siteIds == resource.data.siteIds
+      );
+    }
+
+    match /clients/{clientId} {
+      allow read: if sameOrg(resource.data.organizationId)
+        && (isSupervisor() || (role() == 'caseworker' && request.auth.uid in resource.data.assignedWorkerIds));
+      allow create: if signedIn() && sameOrg(request.resource.data.organizationId) && sameSite(request.resource.data.siteId);
+      allow update: if signedIn() && sameOrg(resource.data.organizationId) && sameSite(resource.data.siteId);
+      allow delete: if isAdmin();
+    }
+
+    match /{collectionName}/{docId} {
+      allow read: if signedIn() && sameOrg(resource.data.organizationId) && (
+        isSupervisor() || sameSite(resource.data.siteId)
+      );
+      allow create: if signedIn() && sameOrg(request.resource.data.organizationId) && sameSite(request.resource.data.siteId);
+      allow update: if signedIn() && sameOrg(resource.data.organizationId) && sameSite(resource.data.siteId);
+      allow delete: if isAdmin();
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if signedIn() && sameOrg(resource.data.organizationId) && isAdmin();
+      allow create: if signedIn() && sameOrg(request.resource.data.organizationId) && (isAdmin() || isSupervisor());
+      allow update, delete: if false;
+    }
+  }
+}
