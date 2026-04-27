@@ -1,48 +1,47 @@
-import { db } from "../firebase/client";
-import { collection, doc, setDoc, query, where, getDocs, orderBy, limit } from "firebase/firestore";
-import { AuditLog } from "@/types";
+import { db } from '../firebase/client';
+import { AuditLog, ServiceActor } from '@/types';
+import { collection, doc, getDocs, limit, orderBy, query, setDoc, where } from 'firebase/firestore';
+import { ensureOrgAccess } from './serviceHelpers';
 
-const COLLECTION_NAME = "auditLogs";
+const COLLECTION_NAME = 'auditLogs';
+
+export interface AuditLogFilters {
+  userId?: string;
+  action?: string;
+  entityType?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  limitCount?: number;
+}
 
 export const auditLogsService = {
-  /**
-   * Write a new audit log
-   */
-  async writeAuditLog(log: Omit<AuditLog, "id">): Promise<void> {
+  async writeAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'> & { timestamp?: string }): Promise<void> {
     const newLogRef = doc(collection(db, COLLECTION_NAME));
-    const fullLog: AuditLog = {
+    const payload: AuditLog = {
       ...log,
       id: newLogRef.id,
-      timestamp: new Date().toISOString()
+      timestamp: log.timestamp ?? new Date().toISOString(),
     };
-    await setDoc(newLogRef, fullLog);
+
+    await setDoc(newLogRef, payload);
   },
 
-  /**
-   * Get audit logs for an organization
-   */
-  async getAuditLogs(orgId: string, count: number = 50): Promise<AuditLog[]> {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      where("organizationId", "==", orgId),
-      orderBy("timestamp", "desc"),
-      limit(count)
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as AuditLog);
-  },
+  async getAuditLogs(actor: ServiceActor, filters: AuditLogFilters = {}): Promise<AuditLog[]> {
+    ensureOrgAccess(actor, actor.organizationId);
 
-  /**
-   * Get audit logs for a specific user
-   */
-  async getUserActivity(userId: string, count: number = 20): Promise<AuditLog[]> {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      where("userId", "==", userId),
-      orderBy("timestamp", "desc"),
-      limit(count)
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as AuditLog);
-  }
+    const constraints = [
+      where('organizationId', '==', actor.organizationId),
+      orderBy('timestamp', 'desc'),
+      limit(filters.limitCount ?? 100),
+    ];
+
+    if (filters.userId) constraints.unshift(where('userId', '==', filters.userId));
+    if (filters.action) constraints.unshift(where('action', '==', filters.action));
+    if (filters.entityType) constraints.unshift(where('entityType', '==', filters.entityType));
+    if (filters.dateFrom) constraints.unshift(where('timestamp', '>=', filters.dateFrom));
+    if (filters.dateTo) constraints.unshift(where('timestamp', '<=', filters.dateTo));
+
+    const snapshot = await getDocs(query(collection(db, COLLECTION_NAME), ...constraints));
+    return snapshot.docs.map((entry) => entry.data() as AuditLog);
+  },
 };

@@ -1,54 +1,80 @@
-import { db } from "../firebase/client";
-import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc } from "firebase/firestore";
-import { User, Role } from "@/types";
+import { db } from '../firebase/client';
+import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { ServiceActor, UserProfile } from '@/types';
+import { auditLogsService } from './auditLogsService';
 
-const COLLECTION_NAME = "users";
+const COLLECTION_NAME = 'users';
 
 export const usersService = {
-  /**
-   * Fetch a specific user profile
-   */
-  async getUser(uid: string): Promise<User | null> {
+  async getCurrentUserProfile(uid: string): Promise<UserProfile | null> {
     const userDoc = await getDoc(doc(db, COLLECTION_NAME, uid));
-    if (userDoc.exists()) {
-      return userDoc.data() as User;
-    }
-    return null;
+    return userDoc.exists() ? (userDoc.data() as UserProfile) : null;
   },
 
-  /**
-   * Get all users for an organization
-   */
-  async getUsersByOrganization(orgId: string): Promise<User[]> {
-    const q = query(collection(db, COLLECTION_NAME), where("organizationId", "==", orgId));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as User);
+  async getUsersByOrganization(organizationId: string): Promise<UserProfile[]> {
+    const snapshot = await getDocs(query(collection(db, COLLECTION_NAME), where('organizationId', '==', organizationId)));
+    return snapshot.docs.map((entry) => entry.data() as UserProfile);
   },
 
-  /**
-   * Get users by specific roles within an organization
-   */
-  async getUsersByRoles(orgId: string, roles: Role[]): Promise<User[]> {
-    const q = query(
-      collection(db, COLLECTION_NAME), 
-      where("organizationId", "==", orgId),
-      where("role", "in", roles)
+  async getUsersBySite(organizationId: string, siteIds: string[]): Promise<UserProfile[]> {
+    if (!siteIds.length) return [];
+    const snapshot = await getDocs(
+      query(
+        collection(db, COLLECTION_NAME),
+        where('organizationId', '==', organizationId),
+        where('siteIds', 'array-contains-any', siteIds.slice(0, 10))
+      )
     );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as User);
+    return snapshot.docs.map((entry) => entry.data() as UserProfile);
   },
 
-  /**
-   * Create or overwrite a user profile
-   */
-  async createUserProfile(user: User): Promise<void> {
-    await setDoc(doc(db, COLLECTION_NAME, user.id), user);
+  async createUserProfile(data: UserProfile, actor?: ServiceActor): Promise<void> {
+    await setDoc(doc(db, COLLECTION_NAME, data.id), data);
+    if (actor) {
+      await auditLogsService.writeAuditLog({
+        organizationId: actor.organizationId,
+        userId: actor.id,
+        action: 'create_user',
+        entityType: 'user',
+        entityId: data.id,
+      });
+    }
   },
 
-  /**
-   * Update specific fields on a user profile
-   */
-  async updateUserProfile(uid: string, data: Partial<User>): Promise<void> {
-    await updateDoc(doc(db, COLLECTION_NAME, uid), data);
-  }
+  async updateUserProfile(userId: string, data: Partial<UserProfile>, actor?: ServiceActor): Promise<void> {
+    await updateDoc(doc(db, COLLECTION_NAME, userId), { ...data, updatedAt: new Date().toISOString() });
+    if (actor) {
+      await auditLogsService.writeAuditLog({
+        organizationId: actor.organizationId,
+        userId: actor.id,
+        action: 'update_user',
+        entityType: 'user',
+        entityId: userId,
+      });
+    }
+  },
+
+  async deactivateUser(userId: string, actor: ServiceActor): Promise<void> {
+    await updateDoc(doc(db, COLLECTION_NAME, userId), { status: 'inactive', updatedAt: new Date().toISOString() });
+    await auditLogsService.writeAuditLog({
+      organizationId: actor.organizationId,
+      userId: actor.id,
+      action: 'deactivate_user',
+      entityType: 'user',
+      entityId: userId,
+    });
+  },
+
+  async getCaseworkersForSite(siteId: string, organizationId: string): Promise<UserProfile[]> {
+    const snapshot = await getDocs(
+      query(
+        collection(db, COLLECTION_NAME),
+        where('organizationId', '==', organizationId),
+        where('role', '==', 'caseworker'),
+        where('siteIds', 'array-contains', siteId)
+      )
+    );
+
+    return snapshot.docs.map((entry) => entry.data() as UserProfile);
+  },
 };

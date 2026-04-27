@@ -1,32 +1,35 @@
 import * as admin from 'firebase-admin';
 
-// Load service account from env if available, otherwise it falls back to default app credentials
-// It's strongly recommended to provide FIREBASE_SERVICE_ACCOUNT_KEY in .env.local as a JSON string
-let serviceAccount: any = null;
+interface ServiceAccountLike {
+  project_id?: string;
+  client_email?: string;
+  private_key?: string;
+}
 
-try {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-  } else {
-    // Attempt to load from a local file as fallback, as provided in instructions
-    try {
-      serviceAccount = require('../../../serviceAccountKey.json');
-    } catch (e) {
-      console.warn("Could not find serviceAccountKey.json in the root directory.");
-    }
+function readServiceAccount(): ServiceAccountLike | null {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as ServiceAccountLike;
+  } catch (error) {
+    console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY.', error);
+    return null;
   }
-} catch (error) {
-  console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY from environment variables.", error);
 }
 
 if (!admin.apps.length) {
-  if (serviceAccount) {
+  const serviceAccount = readServiceAccount();
+
+  if (serviceAccount?.project_id && serviceAccount.client_email && serviceAccount.private_key) {
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
+      credential: admin.credential.cert({
+        projectId: serviceAccount.project_id,
+        clientEmail: serviceAccount.client_email,
+        privateKey: serviceAccount.private_key,
+      }),
     });
   } else {
-    // If no credentials found, initialize with default, but this will fail for authenticated operations
-    console.warn("Initializing Firebase Admin without explicit credentials. Server actions may fail.");
     admin.initializeApp();
   }
 }

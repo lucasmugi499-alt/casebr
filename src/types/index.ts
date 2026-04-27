@@ -1,20 +1,36 @@
 export type Role = 'caseworker' | 'ssa' | 'manager' | 'admin';
 
+export type EntityStatus = 'active' | 'inactive';
+
+export interface OrganizationSettings {
+  allowAI: boolean;
+  allowVoiceNotes: boolean;
+  dataRetentionMonths: number;
+  requireSupervisorReviewForHighRisk: boolean;
+  clientIdentifierMode: 'client_code' | 'display_name';
+}
+
 export interface Organization {
   id: string;
   name: string;
+  status: EntityStatus;
+  settings: OrganizationSettings;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface Site {
   id: string;
   organizationId: string;
   name: string;
-  address?: string;
+  address: string;
+  type: 'shelter' | 'drop_in' | 'outreach_hub' | 'supportive_housing' | 'other';
+  status: EntityStatus;
   createdAt: string;
+  updatedAt: string;
 }
 
-export interface User {
+export interface UserProfile {
   id: string;
   organizationId: string;
   siteIds: string[];
@@ -23,10 +39,13 @@ export interface User {
   email: string;
   role: Role;
   title: string;
-  status: 'active' | 'inactive';
+  status: EntityStatus;
   createdAt: string;
+  updatedAt: string;
   lastLoginAt?: string;
 }
+
+export type User = UserProfile;
 
 export type ClientStatus = 'intake' | 'active' | 'follow_up_needed' | 'housed' | 'discharged' | 'inactive';
 export type Priority = 'low' | 'medium' | 'high';
@@ -45,7 +64,7 @@ export interface Client {
   assignedWorkerIds: string[];
   status: ClientStatus;
   priority: Priority;
-  currentGoal?: string;
+  currentGoal: string;
   lastContactAt?: string;
   nextFollowUpAt?: string;
   createdAt: string;
@@ -53,8 +72,33 @@ export interface Client {
   createdById: string;
 }
 
-export type ContactType = 'in_person' | 'phone' | 'email' | 'outreach' | 'appointment_accompaniment' | 'case_conference' | 'crisis_support' | 'informal_check_in' | 'referral_support' | 'housing_support';
-export type NoteCategory = 'general_check_in' | 'housing' | 'income_support' | 'identification' | 'mental_health' | 'substance_use' | 'safety_planning' | 'medical_health' | 'employment' | 'legal' | 'family_supports' | 'behavioural_incident_follow_up' | 'discharge_planning' | 'system_navigation';
+export type ContactType =
+  | 'in_person'
+  | 'phone'
+  | 'email'
+  | 'outreach'
+  | 'appointment_accompaniment'
+  | 'case_conference'
+  | 'crisis_support'
+  | 'informal_check_in'
+  | 'referral_support'
+  | 'housing_support';
+
+export type NoteCategory =
+  | 'general_check_in'
+  | 'housing'
+  | 'income_support'
+  | 'identification'
+  | 'mental_health'
+  | 'substance_use'
+  | 'safety_planning'
+  | 'medical_health'
+  | 'employment'
+  | 'legal'
+  | 'family_supports'
+  | 'behavioural_incident_follow_up'
+  | 'discharge_planning'
+  | 'system_navigation';
 
 export interface CaseNote {
   id: string;
@@ -66,15 +110,16 @@ export interface CaseNote {
   contactType: ContactType;
   category: NoteCategory;
   location?: string;
-  rawInput?: string;
-  finalNote: string;
+  roughSummary: string;
   actionsTaken?: string;
   referralsMade?: string;
+  followUpRequired: boolean;
+  riskSafetyConcerns?: string;
+  finalNote: string;
   aiGenerated: boolean;
+  aiActionUsed?: string;
   supervisorReviewed: boolean;
   supervisorReviewId?: string;
-  riskMentioned: boolean;
-  followUpRequired: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -89,7 +134,7 @@ export interface Task {
   assignedToId: string;
   createdById: string;
   title: string;
-  description?: string;
+  description: string;
   dueDate: string;
   priority: Priority;
   status: TaskStatus;
@@ -98,7 +143,6 @@ export interface Task {
   updatedAt: string;
 }
 
-export type ReferralType = 'housing' | 'income_support' | 'id_replacement' | 'mental_health' | 'substance_use_support' | 'medical' | 'employment' | 'legal' | 'food_clothing' | 'other';
 export type ReferralStatus = 'pending' | 'completed' | 'declined' | 'no_response' | 'cancelled';
 
 export interface Referral {
@@ -107,7 +151,7 @@ export interface Referral {
   siteId: string;
   clientId: string;
   createdById: string;
-  referralType: ReferralType;
+  referralType: string;
   agencyName: string;
   contactPerson?: string;
   contactInfo?: string;
@@ -119,7 +163,7 @@ export interface Referral {
   updatedAt: string;
 }
 
-export type RiskCategory = 'mental_health' | 'substance_use' | 'conflict_safety' | 'medical' | 'vulnerability' | 'housing_instability' | 'missing_lost_contact' | 'other';
+export type RiskSeverity = 'low' | 'medium' | 'high';
 
 export interface RiskFlag {
   id: string;
@@ -127,17 +171,17 @@ export interface RiskFlag {
   siteId: string;
   clientId: string;
   createdById: string;
-  category: RiskCategory;
-  severity: Priority;
+  category: string;
+  severity: RiskSeverity;
   description: string;
   active: boolean;
   supervisorReviewRequired: boolean;
+  reviewedById?: string;
+  reviewedAt?: string;
   resolvedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
-
-export type SafetyPlanStatus = 'active' | 'review_due' | 'closed';
 
 export interface SafetyPlan {
   id: string;
@@ -153,7 +197,7 @@ export interface SafetyPlan {
   emergencySteps: string;
   clientAgreed: boolean;
   reviewDate: string;
-  status: SafetyPlanStatus;
+  status: 'active' | 'review_due' | 'closed';
   createdAt: string;
   updatedAt: string;
 }
@@ -162,12 +206,16 @@ export interface SupervisorReview {
   id: string;
   organizationId: string;
   siteId: string;
-  entityId: string; // ID of the note, risk flag, etc.
-  entityType: 'case_note' | 'risk_flag' | 'safety_plan';
+  clientId?: string;
+  caseNoteId?: string;
+  riskFlagId?: string;
   supervisorId: string;
-  comments: string;
+  workerId?: string;
+  reviewType: 'case_note' | 'risk_flag' | 'safety_plan' | 'general';
+  comment: string;
   actionRequired: boolean;
-  resolved: boolean;
+  actionDueDate?: string;
+  completedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -181,41 +229,31 @@ export interface AuditLog {
   entityType: string;
   entityId: string;
   timestamp: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
-
-export type TimelineItemType = 'case_note' | 'task' | 'referral' | 'risk_flag' | 'safety_plan' | 'supervisor_review' | 'status_change';
 
 export interface TimelineItem {
   id: string;
+  type: 'case_note' | 'task' | 'referral' | 'risk_flag' | 'safety_plan' | 'supervisor_review';
   date: string;
-  type: TimelineItemType;
-  staffName: string;
+  title: string;
   summary: string;
-  detailsId: string; // The ID to the actual record
-  priority?: Priority;
-  aiGenerated?: boolean;
+  staffId: string;
+  staffName?: string;
+  entityId: string;
+  entityType: string;
 }
 
-export interface OutcomeMetric {
-  id: string;
-  organizationId: string;
-  siteId: string;
-  clientId: string;
-  createdById: string;
-  category: string;
-  dateAchieved: string;
-  notes?: string;
+export interface DashboardMetric {
+  label: string;
+  value: number;
+  change?: string;
+  status?: 'good' | 'warning' | 'critical' | 'neutral';
 }
 
-export interface Report {
+export interface ServiceActor {
   id: string;
   organizationId: string;
-  generatedById: string;
-  type: 'weekly_team' | 'monthly_program' | 'client_summary' | 'caseworker_activity';
-  dateRangeStart: string;
-  dateRangeEnd: string;
-  filters?: any;
-  downloadUrl?: string;
-  createdAt: string;
+  role: Role;
+  siteIds: string[];
 }
