@@ -41,9 +41,19 @@ export default function LoginPage() {
       }
 
       const bootstrapAdminEmail = process.env.NEXT_PUBLIC_BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
+      const bootstrapAdminUids = (
+        process.env.NEXT_PUBLIC_BOOTSTRAP_ADMIN_UIDS ??
+        process.env.NEXT_PUBLIC_BOOTSTRAP_ADMIN_UID ??
+        "OOV63O814mNYiUbFXqoVeHVD2Mk2"
+      )
+        .split(",")
+        .map((uid) => uid.trim())
+        .filter(Boolean);
       const normalizedEmail = email.trim().toLowerCase();
+      const isBootstrapAdminByEmail = Boolean(bootstrapAdminEmail && normalizedEmail === bootstrapAdminEmail);
+      const isBootstrapAdminByUid = bootstrapAdminUids.includes(userCredential.user.uid);
 
-      if (bootstrapAdminEmail && normalizedEmail === bootstrapAdminEmail) {
+      if (isBootstrapAdminByEmail || isBootstrapAdminByUid) {
         const newAdmin: User = {
           id: userCredential.user.uid,
           organizationId: "org_casebridge_demo",
