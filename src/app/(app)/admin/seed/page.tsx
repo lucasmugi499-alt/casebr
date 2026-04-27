@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { db } from "@/lib/firebase/client";
-import { doc, setDoc, collection } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -70,8 +70,8 @@ export default function SeedPage() {
       // (Simplified for MVP seeder)
       
       toast.success("Demo data seeded successfully!");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to seed data");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to seed data");
     } finally {
       setLoading(false);
     }
@@ -89,7 +89,7 @@ export default function SeedPage() {
           </CardHeader>
           <CardContent>
             <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg mb-6">
-              <p className="text-sm text-amber-800 font-medium">Warning: This will overwrite existing data with IDs like 'org-1', 'site-downtown', etc.</p>
+              <p className="text-sm text-amber-800 font-medium">Warning: This will overwrite existing data with IDs like &apos;org-1&apos;, &apos;site-downtown&apos;, etc.</p>
             </div>
             <Button 
               onClick={seedData} 
