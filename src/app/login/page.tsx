@@ -14,6 +14,23 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from "sonner";
 import { ShieldAlert } from "lucide-react";
 
+const FIRESTORE_REQUEST_TIMEOUT_MS = 10_000;
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,7 +45,11 @@ export default function LoginPage() {
       
       let userDoc = null;
       try {
-        userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+        userDoc = await withTimeout(
+          getDoc(doc(db, "users", userCredential.user.uid)),
+          FIRESTORE_REQUEST_TIMEOUT_MS,
+          "Timed out looking up your staff profile."
+        );
       } catch (firestoreError) {
         console.warn("Firestore error (e.g. not initialized yet or offline):", firestoreError);
       }
@@ -48,7 +69,11 @@ export default function LoginPage() {
       let isFirstAdminBootstrap = false;
 
       try {
-        const adminsSnapshot = await getDocs(query(collection(db, "users"), where("role", "==", "admin"), limit(1)));
+        const adminsSnapshot = await withTimeout(
+          getDocs(query(collection(db, "users"), where("role", "==", "admin"), limit(1))),
+          FIRESTORE_REQUEST_TIMEOUT_MS,
+          "Timed out checking existing admin accounts."
+        );
         isFirstAdminBootstrap = adminsSnapshot.empty;
       } catch (firestoreError) {
         console.warn("Could not check existing admins. Skipping first-admin bootstrap fallback.", firestoreError);
@@ -69,7 +94,11 @@ export default function LoginPage() {
           updatedAt: new Date().toISOString(),
         };
 
-        await setDoc(doc(db, "users", userCredential.user.uid), newAdmin);
+        await withTimeout(
+          setDoc(doc(db, "users", userCredential.user.uid), newAdmin),
+          FIRESTORE_REQUEST_TIMEOUT_MS,
+          "Timed out creating your admin profile."
+        );
         toast.success(
           isFirstAdminBootstrap
             ? "No admin profile existed yet, so this account was promoted to admin. You can now create staff accounts and roles."

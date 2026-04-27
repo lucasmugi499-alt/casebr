@@ -4,8 +4,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User as FirebaseUser, signOut as firebaseSignOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/client';
 import { doc, getDoc } from 'firebase/firestore';
-import { User, Role } from '@/types';
-import { useRouter, usePathname } from 'next/navigation';
+import { User } from '@/types';
+import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
   user: User | null;
@@ -23,20 +23,39 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
+const FIRESTORE_PROFILE_TIMEOUT_MS = 10_000;
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const pathname = usePathname();
-
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fUser) => {
       setFirebaseUser(fUser);
       if (fUser) {
         try {
           // Fetch custom user profile from Firestore to get role
-          const userDoc = await getDoc(doc(db, 'users', fUser.uid));
+          const userDoc = await withTimeout(
+            getDoc(doc(db, 'users', fUser.uid)),
+            FIRESTORE_PROFILE_TIMEOUT_MS,
+            'Timed out loading user profile from Firestore.'
+          );
           if (userDoc.exists()) {
             const userData = userDoc.data() as User;
             setUser(userData);
@@ -52,6 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUser(null);
       }
+
       setLoading(false);
     });
 
