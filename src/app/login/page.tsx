@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/client";
 import { useRouter } from "next/navigation";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { User } from "@/types";
+import { getHomeRouteForRole } from "@/lib/auth/roleRouting";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,31 +36,36 @@ export default function LoginPage() {
       if (userDoc && userDoc.exists()) {
         const userData = userDoc.data() as User;
         toast.success(`Welcome back, ${userData.firstName}`);
-        if (userData.role === "caseworker") router.push("/dashboard");
-        else if (userData.role === "ssa") router.push("/team");
-        else if (userData.role === "manager") router.push("/management");
-        else if (userData.role === "admin") router.push("/admin/users");
-        else router.push("/dashboard"); // Fallback
-      } else {
-        // AUTO-CREATE PROFILE FOR PREVIEW
-        console.log("Profile missing, auto-creating admin profile for preview...");
+        router.push(getHomeRouteForRole(userData.role));
+        return;
+      }
+
+      const bootstrapAdminEmail = process.env.NEXT_PUBLIC_BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
+      const normalizedEmail = email.trim().toLowerCase();
+
+      if (bootstrapAdminEmail && normalizedEmail === bootstrapAdminEmail) {
         const newAdmin: User = {
           id: userCredential.user.uid,
           organizationId: "org_casebridge_demo",
           siteIds: ["site_downtown"],
-          firstName: email.split('@')[0],
-          lastName: "(Admin)",
-          email: email,
+          firstName: email.split("@")[0],
+          lastName: "Admin",
+          email,
           role: "admin",
           title: "System Administrator",
           status: "active",
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         };
-        
+
         await setDoc(doc(db, "users", userCredential.user.uid), newAdmin);
-        toast.success("Admin profile created! Welcome to the preview.");
+        toast.success("Admin profile ready. You can now create staff accounts and roles.");
         router.push("/admin/users");
+        return;
       }
+
+      await signOut(auth);
+      toast.error("No staff profile found for this account. Ask an admin to create your profile and assign a role.");
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Failed to log in");
     } finally {
@@ -132,7 +138,7 @@ export default function LoginPage() {
               {loading ? "Please wait..." : "Log In"}
             </Button>
             <p className="text-xs text-center text-slate-500">
-              New staff members must be invited by an administrator.
+              Staff sign-in works after an admin creates their profile and role.
             </p>
           </CardFooter>
         </form>
