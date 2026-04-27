@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/client";
 import { useRouter } from "next/navigation";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { User } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,35 +16,14 @@ import { ShieldAlert } from "lucide-react";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      let userCredential;
-      if (isSignUp) {
-        userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        // Create a basic default user document in Firestore for new sign-ups
-        try {
-          await setDoc(doc(db, "users", userCredential.user.uid), {
-            id: userCredential.user.uid,
-            email: email,
-            firstName: email.split('@')[0],
-            lastName: "",
-            role: "caseworker", // Default role
-            status: "active",
-            createdAt: new Date().toISOString()
-          });
-        } catch (err) {
-          console.warn("Could not create user document in Firestore. Check your database rules.", err);
-        }
-        toast.success("Account created! Welcome to CaseBridge.");
-      } else {
-        userCredential = await signInWithEmailAndPassword(auth, email, password);
-      }
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
       let userDoc = null;
       try {
@@ -55,21 +34,34 @@ export default function LoginPage() {
       
       if (userDoc && userDoc.exists()) {
         const userData = userDoc.data() as User;
-        if (!isSignUp) toast.success(`Welcome back, ${userData.firstName}`);
+        toast.success(`Welcome back, ${userData.firstName}`);
         if (userData.role === "caseworker") router.push("/dashboard");
         else if (userData.role === "ssa") router.push("/team");
         else if (userData.role === "manager") router.push("/management");
         else if (userData.role === "admin") router.push("/admin/users");
         else router.push("/dashboard"); // Fallback
       } else {
-        // Fallback for demo if no custom doc
-        if (!isSignUp) toast.success("Welcome to CaseBridge (Dashboard preview)");
-        router.push("/dashboard");
+        // If profile is missing, log them out and show error
+        await auth.signOut();
+        toast.error("Your account has not been assigned to an organization. Please contact your administrator.");
       }
     } catch (error: any) {
-      toast.error(error.message || `Failed to ${isSignUp ? 'sign up' : 'log in'}`);
+      toast.error(error.message || "Failed to log in");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!email) {
+      toast.error("Please enter your email address first.");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      toast.success("Password reset email sent. Please check your inbox.");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to send reset email");
     }
   };
 
@@ -82,10 +74,10 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight">CaseBridge</CardTitle>
           <CardDescription>
-            {isSignUp ? "Create a new shelter staff account." : "Log in to your shelter casework operating system."}
+            Log in to your shelter casework operating system.
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleAuth}>
+        <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -100,7 +92,16 @@ export default function LoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <button 
+                  type="button"
+                  onClick={handleResetPassword}
+                  className="text-xs text-indigo-600 hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <Input
                 id="password"
                 type="password"
@@ -113,17 +114,11 @@ export default function LoginPage() {
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
             <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700" disabled={loading}>
-              {loading ? "Please wait..." : (isSignUp ? "Sign Up" : "Log In")}
+              {loading ? "Please wait..." : "Log In"}
             </Button>
-            <Button 
-              type="button" 
-              variant="ghost" 
-              className="w-full text-sm text-slate-500" 
-              onClick={() => setIsSignUp(!isSignUp)}
-              disabled={loading}
-            >
-              {isSignUp ? "Already have an account? Log in" : "Need an account? Sign up"}
-            </Button>
+            <p className="text-xs text-center text-slate-500">
+              New staff members must be invited by an administrator.
+            </p>
           </CardFooter>
         </form>
       </Card>
