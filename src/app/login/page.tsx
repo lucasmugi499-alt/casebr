@@ -4,7 +4,7 @@ import { useState } from "react";
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/client";
 import { useRouter } from "next/navigation";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { User } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,9 +41,24 @@ export default function LoginPage() {
         else if (userData.role === "admin") router.push("/admin/users");
         else router.push("/dashboard"); // Fallback
       } else {
-        // If profile is missing, log them out and show error
-        await auth.signOut();
-        toast.error("Your account has not been assigned to an organization. Please contact your administrator.");
+        // AUTO-CREATE PROFILE FOR PREVIEW
+        console.log("Profile missing, auto-creating admin profile for preview...");
+        const newAdmin: User = {
+          id: userCredential.user.uid,
+          organizationId: "org_casebridge_demo",
+          siteIds: ["site_downtown"],
+          firstName: email.split('@')[0],
+          lastName: "(Admin)",
+          email: email,
+          role: "admin",
+          title: "System Administrator",
+          status: "active",
+          createdAt: new Date().toISOString()
+        };
+        
+        await setDoc(doc(db, "users", userCredential.user.uid), newAdmin);
+        toast.success("Admin profile created! Welcome to the preview.");
+        router.push("/admin/users");
       }
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Failed to log in");
