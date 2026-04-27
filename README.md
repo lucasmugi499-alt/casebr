@@ -16,13 +16,14 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 GEMINI_API_KEY=
 FIREBASE_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}'
 NEXT_PUBLIC_BOOTSTRAP_ADMIN_EMAIL=admin@your-org.org
+NEXT_PUBLIC_BOOTSTRAP_ADMIN_UID=
 ```
 
 ## Login setup (simple flow)
 
 - Create your own Firebase Auth user for the admin email first.
-- Set `NEXT_PUBLIC_BOOTSTRAP_ADMIN_EMAIL` to that same email.
-- First login with that email auto-creates the admin profile in `users`.
+- Set `NEXT_PUBLIC_BOOTSTRAP_ADMIN_EMAIL` to that same email **or** set `NEXT_PUBLIC_BOOTSTRAP_ADMIN_UID` to the Firebase Auth UID you want to bootstrap as admin.
+- First login with the matching bootstrap email/UID auto-creates the admin profile in `users`.
 - After that, staff accounts should only log in after an admin creates their profile and assigns a role.
 
 ## Run locally
