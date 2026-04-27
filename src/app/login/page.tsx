@@ -41,6 +41,16 @@ export default function LoginPage() {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    if (isMock) {
+      setTimeout(() => {
+        router.push(getHomeRouteForRole("admin"));
+        setLoading(false);
+        toast.success("Logged in as Demo Admin (Mock Mode)");
+      }, 800);
+      return;
+    }
+
     try {
       let userCredential;
       if (isSignUp) {
@@ -125,6 +135,12 @@ export default function LoginPage() {
       toast.error("Please enter your email address first.");
       return;
     }
+
+    if (isMock) {
+      toast.success("Mock mode: Password reset email simulated.");
+      return;
+    }
+
     try {
       await sendPasswordResetEmail(auth, email);
       toast.success("Password reset email sent. Please check your inbox.");
