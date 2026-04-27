@@ -1,71 +1,102 @@
-import { db } from "../firebase/client";
-import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, orderBy, limit } from "firebase/firestore";
-import { CaseNote } from "@/types";
+import { CaseNote, ServiceActor } from '@/types';
+import { db } from '../firebase/client';
+import { collection, doc, getDocs, limit, orderBy, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { auditLogsService } from './auditLogsService';
+import { clientsService } from './clientsService';
+import { ensureOrgAccess, ensureSiteAccess, ServiceError } from './serviceHelpers';
 
-const COLLECTION_NAME = "caseNotes";
+const COLLECTION_NAME = 'caseNotes';
 
 export const caseNotesService = {
-  /**
-   * Fetch a specific case note
-   */
-  async getCaseNote(noteId: string): Promise<CaseNote | null> {
-    const noteDoc = await getDoc(doc(db, COLLECTION_NAME, noteId));
-    if (noteDoc.exists()) {
-      return noteDoc.data() as CaseNote;
-    }
-    return null;
+  async createCaseNote(data: Omit<CaseNote, 'id' | 'createdAt' | 'updatedAt'>, actor: ServiceActor): Promise<CaseNote> {
+    ensureOrgAccess(actor, data.organizationId);
+    ensureSiteAccess(actor, data.siteId);
+
+    const client = await clientsService.getClientById(data.clientId, actor);
+    if (!client) throw new ServiceError('Client not found.');
+
+    const ref = doc(collection(db, COLLECTION_NAME));
+    const timestamp = new Date().toISOString();
+
+    const note: CaseNote = {
+      ...data,
+      id: ref.id,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+
+    await setDoc(ref, note);
+
+    await clientsService.updateClient(note.clientId, { lastContactAt: note.contactDate }, actor);
+
+    await auditLogsService.writeAuditLog({
+      organizationId: note.organizationId,
+      siteId: note.siteId,
+      userId: actor.id,
+      action: 'create_case_note',
+      entityType: 'caseNote',
+      entityId: note.id,
+      metadata: { aiGenerated: note.aiGenerated, category: note.category },
+    });
+
+    return note;
   },
 
-  /**
-   * Get case notes for a specific client
-   */
-  async getCaseNotesByClient(clientId: string): Promise<CaseNote[]> {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      where("clientId", "==", clientId),
-      orderBy("contactDate", "desc")
+  async updateCaseNote(noteId: string, data: Partial<CaseNote>, actor: ServiceActor): Promise<void> {
+    await updateDoc(doc(db, COLLECTION_NAME, noteId), {
+      ...data,
+      updatedAt: new Date().toISOString(),
+    });
+
+    await auditLogsService.writeAuditLog({
+      organizationId: actor.organizationId,
+      userId: actor.id,
+      action: 'update_case_note',
+      entityType: 'caseNote',
+      entityId: noteId,
+      metadata: { updatedFields: Object.keys(data) },
+    });
+  },
+
+  async getNotesForClient(clientId: string, actor: ServiceActor): Promise<CaseNote[]> {
+    const client = await clientsService.getClientById(clientId, actor);
+    if (!client) return [];
+
+    const snapshot = await getDocs(
+      query(collection(db, COLLECTION_NAME), where('clientId', '==', clientId), orderBy('contactDate', 'desc'))
     );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as CaseNote);
+
+    return snapshot.docs.map((record) => record.data() as CaseNote);
   },
 
-  /**
-   * Get recent case notes for an organization/site
-   */
-  async getRecentCaseNotes(orgId: string, siteId?: string, count: number = 10): Promise<CaseNote[]> {
-    let q;
-    if (siteId) {
-      q = query(
+  async getRecentNotesForUser(actor: ServiceActor): Promise<CaseNote[]> {
+    const snapshot = await getDocs(
+      query(
         collection(db, COLLECTION_NAME),
-        where("organizationId", "==", orgId),
-        where("siteId", "==", siteId),
-        orderBy("createdAt", "desc"),
-        limit(count)
-      );
-    } else {
-      q = query(
+        where('organizationId', '==', actor.organizationId),
+        where('authorId', '==', actor.id),
+        orderBy('createdAt', 'desc'),
+        limit(10)
+      )
+    );
+
+    return snapshot.docs.map((record) => record.data() as CaseNote);
+  },
+
+  async getNotesThisWeek(actor: ServiceActor): Promise<CaseNote[]> {
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - 7);
+
+    const snapshot = await getDocs(
+      query(
         collection(db, COLLECTION_NAME),
-        where("organizationId", "==", orgId),
-        orderBy("createdAt", "desc"),
-        limit(count)
-      );
-    }
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as CaseNote);
-  },
+        where('organizationId', '==', actor.organizationId),
+        where('authorId', '==', actor.id),
+        where('createdAt', '>=', weekStart.toISOString()),
+        orderBy('createdAt', 'desc')
+      )
+    );
 
-  /**
-   * Create a new case note
-   */
-  async createCaseNote(note: CaseNote): Promise<void> {
-    await setDoc(doc(db, COLLECTION_NAME, note.id), note);
+    return snapshot.docs.map((record) => record.data() as CaseNote);
   },
-
-  /**
-   * Update a case note
-   */
-  async updateCaseNote(noteId: string, data: Partial<CaseNote>): Promise<void> {
-    data.updatedAt = new Date().toISOString();
-    await updateDoc(doc(db, COLLECTION_NAME, noteId), data);
-  }
 };

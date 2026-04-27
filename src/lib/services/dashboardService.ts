@@ -1,53 +1,34 @@
-import { clientsService } from "./clientsService";
-import { tasksService } from "./tasksService";
-import { caseNotesService } from "./caseNotesService";
-import { riskFlagsService } from "./riskFlagsService";
+import { DashboardMetric, ServiceActor } from '@/types';
+import { caseNotesService } from './caseNotesService';
+import { clientsService } from './clientsService';
+import { tasksService } from './tasksService';
 
 export const dashboardService = {
-  /**
-   * Get metrics for a caseworker's dashboard
-   */
-  async getCaseworkerMetrics(userId: string, orgId: string) {
-    const clients = await clientsService.getAssignedClients(userId, orgId);
-    const tasks = await tasksService.getTasksForUser(userId);
-    
-    const today = new Date().toISOString().split('T')[0];
-    const dueToday = tasks.filter(t => t.dueDate.startsWith(today) && t.status !== 'completed').length;
-    const highPriority = clients.filter(c => c.priority === 'high').length;
-    
-    // Count notes this week
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    const recentNotes = await caseNotesService.getRecentCaseNotes(orgId, undefined, 50);
-    const notesThisWeek = recentNotes.filter(n => 
-      n.authorId === userId && 
-      new Date(n.createdAt) > oneWeekAgo
-    ).length;
+  async getCaseworkerDashboard(actor: ServiceActor) {
+    const [assignedClients, overdueTasks, notesThisWeek] = await Promise.all([
+      clientsService.getAssignedClients(actor.id, actor.organizationId),
+      tasksService.getOverdueTasks(actor),
+      caseNotesService.getNotesThisWeek(actor),
+    ]);
+
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const dueToday = assignedClients.filter((client) => client.nextFollowUpAt?.startsWith(todayKey)).length;
+    const highPriority = assignedClients.filter((client) => client.priority === 'high');
+
+    const metrics: DashboardMetric[] = [
+      { label: 'Assigned clients', value: assignedClients.length },
+      { label: 'Follow-ups due today', value: dueToday },
+      { label: 'Overdue follow-ups', value: overdueTasks.length, status: overdueTasks.length ? 'warning' : 'neutral' },
+      { label: 'High-priority clients', value: highPriority.length, status: highPriority.length ? 'warning' : 'neutral' },
+      { label: 'Notes completed this week', value: notesThisWeek.length },
+    ];
 
     return {
-      assignedClients: clients.length,
-      dueToday,
-      highPriority,
+      metrics,
+      assignedClients,
+      highPriorityClients: highPriority,
+      overdueTasks,
       notesThisWeek,
-      priorityClients: clients.filter(c => c.priority === 'high').slice(0, 5)
     };
   },
-
-  /**
-   * Get metrics for an SSA/Team dashboard
-   */
-  async getTeamMetrics(orgId: string, siteIds: string[]) {
-    const clients = await clientsService.getClientsBySites(siteIds, orgId);
-    const overdueTasks = await tasksService.getOverdueTasksForTeam(siteIds);
-    const activeRiskFlags = await riskFlagsService.getRiskFlagsForSites(siteIds);
-    
-    // Additional aggregations would go here...
-    
-    return {
-      activeClients: clients.length,
-      overdueTasksCount: overdueTasks.length,
-      activeRiskFlagsCount: activeRiskFlags.length,
-      highRiskClients: clients.filter(c => c.priority === 'high').length
-    };
-  }
 };

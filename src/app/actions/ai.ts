@@ -66,11 +66,11 @@ export async function generateCaseNote(roughNotes: string, actionType: string = 
       data: response.text,
       isMock: false
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error generating case note:", error);
     return {
       success: false,
-      error: error.message || "Failed to generate case note"
+      error: error instanceof Error ? error.message : "Failed to generate case note"
     };
   }
 }

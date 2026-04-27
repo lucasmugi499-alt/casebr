@@ -45,8 +45,8 @@ export default function LoginPage() {
         await auth.signOut();
         toast.error("Your account has not been assigned to an organization. Please contact your administrator.");
       }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to log in");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to log in");
     } finally {
       setLoading(false);
     }
@@ -60,8 +60,8 @@ export default function LoginPage() {
     try {
       await sendPasswordResetEmail(auth, email);
       toast.success("Password reset email sent. Please check your inbox.");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to send reset email");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to send reset email");
     }
   };
 

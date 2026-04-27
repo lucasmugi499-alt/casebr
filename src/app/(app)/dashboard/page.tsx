@@ -1,126 +1,131 @@
 "use client";
 
-import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { 
-  Users, 
-  AlertCircle, 
-  Calendar, 
-  Plus, 
-  FileText 
-} from "lucide-react";
-import Link from "next/link";
 import AuthGuard from "@/components/AuthGuard";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { buttonVariants } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { dashboardService } from "@/lib/services/dashboardService";
+import { AlertCircle, CalendarClock, FileText, Plus, Users } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { Client, Task } from "@/types";
+
+interface DashboardData {
+  metrics: { label: string; value: number }[];
+  assignedClients: Client[];
+  highPriorityClients: Client[];
+  overdueTasks: Task[];
+}
 
 export default function CaseworkerDashboard() {
   const { user } = useAuth();
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let active = true;
+
+    dashboardService
+      .getCaseworkerDashboard({
+        id: user.id,
+        organizationId: user.organizationId,
+        role: user.role,
+        siteIds: user.siteIds,
+      })
+      .then((result) => {
+        if (!active) return;
+        setData(result);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Failed to load dashboard data.");
+      })
+      .finally(() => {
+        if (!active) return;
+        setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  const metricIcons = useMemo(
+    () => [Users, CalendarClock, AlertCircle, AlertCircle, FileText],
+    []
+  );
 
   return (
     <AuthGuard allowedRoles={["caseworker"]}>
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Welcome back, {user?.firstName}</h2>
-          <p className="text-muted-foreground">Here is what is happening with your clients today.</p>
+          <h2 className="text-2xl font-bold tracking-tight">Start of shift</h2>
+          <p className="text-muted-foreground">Today’s casework priorities and assigned client activity.</p>
         </div>
 
-        <div className="flex flex-wrap gap-4 mb-6">
-          <Link href="/clients/notes/new" className={buttonVariants({ className: "bg-indigo-600 hover:bg-indigo-700" })}>
-            <Plus className="mr-2 h-4 w-4" /> Add Case Note
-          </Link>
-          <Link href="/clients/new" className={buttonVariants({ variant: "outline" })}>
-            <Plus className="mr-2 h-4 w-4" /> Add Client
-          </Link>
-          <Link href="/tasks/new" className={buttonVariants({ variant: "outline" })}>
-            <Plus className="mr-2 h-4 w-4" /> Add Follow-Up
-          </Link>
+        <div className="flex flex-wrap gap-3">
+          <Link href="/clients" className={buttonVariants()}><Plus className="mr-2 h-4 w-4" />Add Case Note</Link>
+          <Link href="/clients/new" className={buttonVariants({ variant: "outline" })}><Plus className="mr-2 h-4 w-4" />Add Client</Link>
+          <Link href="/tasks/new" className={buttonVariants({ variant: "outline" })}><Plus className="mr-2 h-4 w-4" />Add Follow-Up</Link>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Assigned Clients</CardTitle>
-              <Users className="h-4 w-4 text-slate-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">12</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Follow-ups Due Today</CardTitle>
-              <Calendar className="h-4 w-4 text-amber-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">3</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">High Priority</CardTitle>
-              <AlertCircle className="h-4 w-4 text-red-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">2</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Recent Notes</CardTitle>
-              <FileText className="h-4 w-4 text-indigo-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">8</div>
-              <p className="text-xs text-muted-foreground">This week</p>
-            </CardContent>
-          </Card>
-        </div>
+        {loading && (
+          <div className="grid gap-4 md:grid-cols-5">{Array.from({ length: 5 }).map((_, idx) => <Skeleton key={idx} className="h-28" />)}</div>
+        )}
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card className="col-span-1">
-            <CardHeader>
-              <CardTitle>Priority Clients</CardTitle>
-              <CardDescription>Clients requiring immediate attention.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Placeholder for client list */}
-                <div className="flex items-center justify-between p-3 border rounded-lg bg-red-50 border-red-100">
-                  <div className="flex items-center space-x-4">
-                    <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center text-red-700 font-bold">AJ</div>
-                    <div>
-                      <p className="text-sm font-medium leading-none text-red-900">Alex J.</p>
-                      <p className="text-sm text-red-600 mt-1">Housing instability flag</p>
-                    </div>
+        {error && (
+          <Card className="border-red-200">
+            <CardHeader><CardTitle className="text-red-700">Unable to load dashboard</CardTitle></CardHeader>
+            <CardContent className="text-sm text-red-700">{error}</CardContent>
+          </Card>
+        )}
+
+        {!loading && data && (
+          <>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+              {data.metrics.map((metric, index) => {
+                const Icon = metricIcons[index] ?? Users;
+                return (
+                  <Card key={metric.label}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">{metric.label}</CardTitle>
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent><div className="text-2xl font-bold">{metric.value}</div></CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Assigned clients</CardTitle>
+                <CardDescription>Open a profile and add case notes directly from this list.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!data.assignedClients.length ? (
+                  <p className="text-sm text-muted-foreground">No clients are currently assigned to you.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {data.assignedClients.slice(0, 8).map((client) => (
+                      <div key={client.id} className="flex items-center justify-between rounded-md border p-3">
+                        <div>
+                          <p className="font-medium">{client.displayName}</p>
+                          <p className="text-xs text-muted-foreground">{client.clientCode} • {client.priority} priority</p>
+                        </div>
+                        <Link href={`/clients/${client.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>Open client</Link>
+                      </div>
+                    ))}
                   </div>
-                  <Button variant="outline" size="sm" className="bg-white">View Profile</Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="col-span-1">
-            <CardHeader>
-              <CardTitle>Due Follow-ups</CardTitle>
-              <CardDescription>Tasks scheduled for today or overdue.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                 {/* Placeholder for task list */}
-                 <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center space-x-4">
-                    <div className="h-2 w-2 rounded-full bg-amber-500"></div>
-                    <div>
-                      <p className="text-sm font-medium leading-none">Complete Housing App</p>
-                      <p className="text-sm text-muted-foreground mt-1">Due today • Alex J.</p>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="sm">Done</Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
     </AuthGuard>
   );
