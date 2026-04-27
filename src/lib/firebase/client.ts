@@ -20,40 +20,32 @@ if (!firebaseConfig.projectId) {
 const isMock = !firebaseConfig.projectId;
 const app = isMock ? null : (getApps().length > 0 ? getApp() : initializeApp(firebaseConfig));
 
-export const auth = isMock ? ({
+type MockAuth = ReturnType<typeof getAuth>;
+type MockDb = ReturnType<typeof getFirestore>;
+
+const mockAuth = {
   currentUser: null,
-  onAuthStateChanged: (callback: any) => {
-    // Simulate a signed-in admin for preview purposes
-    setTimeout(() => {
-      callback({
-        uid: "demo-admin-uid",
-        email: "admin@casebridge.demo",
-        displayName: "Demo Admin",
-      });
-    }, 500);
+  onAuthStateChanged: (callback: (user: unknown) => void) => {
+    setTimeout(() => callback(null), 0);
     return () => {};
   },
   signOut: async () => {
     console.log("Mock sign out");
   }
-} as any) : getAuth(app!);
+} as unknown as MockAuth;
 
-export const db = isMock ? ({
+const mockDb = {
   collection: () => ({
     doc: () => ({
       get: async () => ({
-        exists: () => true,
-        data: () => ({
-          id: "demo-admin-uid",
-          role: "admin",
-          firstName: "Demo",
-          lastName: "Admin",
-          organizationId: "org_casebridge_demo",
-          siteIds: ["site_downtown", "site_east"]
-        })
+        exists: () => false,
+        data: () => null,
       })
     })
   })
-} as any) : getFirestore(app!);
+} as unknown as MockDb;
+
+export const auth = isMock ? mockAuth : getAuth(app!);
+export const db = isMock ? mockDb : getFirestore(app!);
 
 export { isMock };

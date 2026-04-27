@@ -1,78 +1,108 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    function userDoc() {
+    function myUserDoc() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function role() {
-      return signedIn() ? userDoc().data.role : null;
+    function myProfileExists() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function orgId() {
-      return signedIn() ? userDoc().data.organizationId : null;
+    function myRole() {
+      return myProfileExists() ? myUserDoc().data.role : null;
     }
 
-    function siteIds() {
-      return signedIn() ? userDoc().data.siteIds : [];
+    function myOrgId() {
+      return myProfileExists() ? myUserDoc().data.organizationId : null;
     }
 
-    function sameOrg(resourceOrgId) {
-      return signedIn() && resourceOrgId == orgId();
+    function mySiteIds() {
+      return myProfileExists() ? myUserDoc().data.siteIds : [];
     }
 
     function isAdmin() {
-      return role() == 'admin';
+      return myRole() == 'admin';
     }
 
     function isManager() {
-      return role() == 'manager' || isAdmin();
+      return myRole() == 'manager' || isAdmin();
     }
 
-    function isSupervisor() {
-      return role() == 'ssa' || isManager();
+    function isSSA() {
+      return myRole() == 'ssa';
     }
 
-    function sameSite(siteId) {
-      return siteId in siteIds() || isManager();
+    function isCaseworker() {
+      return myRole() == 'caseworker';
+    }
+
+    function sameOrg(orgId) {
+      return myProfileExists() && orgId == myOrgId();
+    }
+
+    function sharesSite(siteId) {
+      return siteId in mySiteIds();
     }
 
     match /users/{userId} {
-      allow read: if signedIn() && (isAdmin() || userId == request.auth.uid || isSupervisor());
-      allow create: if signedIn() && userId == request.auth.uid;
-      allow delete: if isAdmin();
-      allow update: if isAdmin() || (
-        userId == request.auth.uid
-        && request.resource.data.role == resource.data.role
-        && request.resource.data.siteIds == resource.data.siteIds
-      );
+      allow read: if isSignedIn() && (userId == request.auth.uid || isAdmin());
+      allow create: if isAdmin()
+        && request.resource.data.id == userId
+        && request.resource.data.role in ['caseworker', 'ssa', 'manager', 'admin'];
+      allow update: if isAdmin()
+        && request.resource.data.id == userId
+        && request.resource.data.role in ['caseworker', 'ssa', 'manager', 'admin'];
+      allow delete: if false;
+    }
+
+    match /organizations/{organizationId} {
+      allow read: if sameOrg(organizationId) && (isManager() || isSSA() || isCaseworker());
+      allow create, update: if sameOrg(organizationId) && isAdmin();
+      allow delete: if false;
+    }
+
+    match /sites/{siteId} {
+      allow read: if sameOrg(resource.data.organizationId)
+        && (isManager() || (isSSA() && sharesSite(siteId)) || (isCaseworker() && sharesSite(siteId)) || isAdmin());
+      allow create, update: if sameOrg(request.resource.data.organizationId) && isAdmin();
+      allow delete: if false;
     }
 
     match /clients/{clientId} {
       allow read: if sameOrg(resource.data.organizationId)
-        && (isSupervisor() || (role() == 'caseworker' && request.auth.uid in resource.data.assignedWorkerIds));
-      allow create: if signedIn() && sameOrg(request.resource.data.organizationId) && sameSite(request.resource.data.siteId);
-      allow update: if signedIn() && sameOrg(resource.data.organizationId) && sameSite(resource.data.siteId);
-      allow delete: if isAdmin();
-    }
-
-    match /{collectionName}/{docId} {
-      allow read: if signedIn() && sameOrg(resource.data.organizationId) && (
-        isSupervisor() || sameSite(resource.data.siteId)
-      );
-      allow create: if signedIn() && sameOrg(request.resource.data.organizationId) && sameSite(request.resource.data.siteId);
-      allow update: if signedIn() && sameOrg(resource.data.organizationId) && sameSite(resource.data.siteId);
-      allow delete: if isAdmin();
+        && (
+          isAdmin()
+          || isManager()
+          || (isSSA() && sharesSite(resource.data.siteId))
+          || (isCaseworker() && request.auth.uid in resource.data.assignedWorkerIds)
+        );
+      allow create, update: if sameOrg(request.resource.data.organizationId)
+        && (isAdmin() || isManager() || (isSSA() && sharesSite(request.resource.data.siteId)));
+      allow delete: if sameOrg(resource.data.organizationId) && isAdmin();
     }
 
     match /auditLogs/{logId} {
-      allow read: if signedIn() && sameOrg(resource.data.organizationId) && isAdmin();
-      allow create: if signedIn() && sameOrg(request.resource.data.organizationId) && (isAdmin() || isSupervisor());
+      allow read: if sameOrg(resource.data.organizationId) && (isAdmin() || isManager());
+      allow create: if sameOrg(request.resource.data.organizationId) && (isAdmin() || isManager() || isSSA());
       allow update, delete: if false;
+    }
+
+    match /{collectionName}/{docId} {
+      allow read: if sameOrg(resource.data.organizationId)
+        && (
+          isAdmin()
+          || isManager()
+          || (isSSA() && sharesSite(resource.data.siteId))
+          || (isCaseworker() && resource.data.siteId in mySiteIds())
+        );
+      allow create, update: if sameOrg(request.resource.data.organizationId)
+        && (isAdmin() || isManager() || (isSSA() && request.resource.data.siteId in mySiteIds()));
+      allow delete: if sameOrg(resource.data.organizationId) && isAdmin();
     }
   }
 }
