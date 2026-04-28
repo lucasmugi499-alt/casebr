@@ -148,6 +148,55 @@ export default function LoginPage() {
             )}
           </CardFooter>
         </form>
+
+        {process.env.NODE_ENV === "development" && (
+          <div className="border-t border-slate-200 mt-2 px-6 py-6 bg-slate-50 rounded-b-xl">
+            <div className="text-center mb-4">
+              <h3 className="text-sm font-semibold text-slate-900">Demo Access</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Use these temporary demo buttons to preview role-specific dashboards while staff account setup is being completed.
+              </p>
+            </div>
+            <div className="space-y-2 flex flex-col">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-slate-300 text-slate-700 hover:bg-slate-100"
+                onClick={() => {
+                  localStorage.setItem("casebridge_demo_role", "caseworker");
+                  window.location.href = "/dashboard";
+                }}
+              >
+                Enter as Caseworker
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-slate-300 text-slate-700 hover:bg-slate-100"
+                onClick={() => {
+                  localStorage.setItem("casebridge_demo_role", "ssa");
+                  window.location.href = "/team";
+                }}
+              >
+                Enter as SSA / Supervisor
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-slate-300 text-slate-700 hover:bg-slate-100"
+                onClick={() => {
+                  localStorage.setItem("casebridge_demo_role", "manager");
+                  window.location.href = "/management";
+                }}
+              >
+                Enter as Manager
+              </Button>
+            </div>
+            <div className="text-center mt-3 text-[10px] text-slate-400">
+              Development-only demo access. Do not enable in production.
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   );

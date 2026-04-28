@@ -17,7 +17,7 @@ if (!firebaseConfig.projectId) {
 }
 
 // Initialize Firebase only if there are no apps already initialized
-const isMock = !firebaseConfig.projectId;
+const isMock = !firebaseConfig.projectId || (typeof window !== "undefined" && localStorage.getItem("casebridge_demo_role") !== null);
 const app = isMock ? null : (getApps().length > 0 ? getApp() : initializeApp(firebaseConfig));
 
 type MockAuth = ReturnType<typeof getAuth>;

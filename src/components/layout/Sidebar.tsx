@@ -55,8 +55,13 @@ export function Sidebar() {
 
   return (
     <div className="flex h-full w-64 flex-col bg-white border-r border-slate-200">
-      <div className="flex h-16 items-center px-6 border-b border-slate-200">
+      <div className="flex h-16 items-center px-6 border-b border-slate-200 justify-between">
         <h1 className="text-xl font-bold text-indigo-900 tracking-tight">CaseBridge</h1>
+        {user.id.startsWith("demo_") && process.env.NODE_ENV === "development" && (
+          <div className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
+            Demo
+          </div>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto py-4">
         <nav className="space-y-1 px-3">
@@ -96,10 +101,22 @@ export function Sidebar() {
             <span className="text-xs text-slate-500">{user.role}</span>
           </div>
         </div>
-        <Button variant="ghost" className="w-full justify-start text-slate-600 hover:text-slate-900 hover:bg-slate-50" onClick={signOut}>
+        <Button 
+          variant="ghost" 
+          className={cn(
+            "w-full justify-start hover:bg-slate-50",
+            user.id.startsWith("demo_") ? "text-amber-700 hover:text-amber-800" : "text-slate-600 hover:text-slate-900"
+          )} 
+          onClick={signOut}
+        >
           <LogOut className="mr-3 h-5 w-5" />
-          Log out
+          {user.id.startsWith("demo_") ? "Exit Demo Mode" : "Log out"}
         </Button>
+        {user.id.startsWith("demo_") && (
+          <p className="mt-2 text-[10px] text-center text-amber-600 font-medium">
+            Development-only demo access.
+          </p>
+        )}
       </div>
     </div>
   );

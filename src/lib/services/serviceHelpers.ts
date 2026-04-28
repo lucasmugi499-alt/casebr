@@ -27,3 +27,7 @@ export function ensureOrgAccess(actor: ServiceActor, organizationId: string) {
 export function isSupervisorRole(role: ServiceActor['role']) {
   return role === 'ssa' || role === 'manager' || role === 'admin';
 }
+
+export function isDemoActor(actor: ServiceActor) {
+  return actor.id.startsWith('demo_');
+}
