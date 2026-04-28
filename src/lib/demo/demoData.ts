@@ -1,0 +1,118 @@
+import { AuditLog, CaseNote, Client, Organization, Referral, RiskFlag, SafetyPlan, Site, SupervisorReview, Task, UserProfile } from "@/types";
+
+const now = new Date();
+const isoDaysAgo = (daysAgo: number, hour = 14) => {
+  const date = new Date(now);
+  date.setUTCDate(date.getUTCDate() - daysAgo);
+  date.setUTCHours(hour, 0, 0, 0);
+  return date.toISOString();
+};
+const isoDaysFromNow = (daysFromNow: number, hour = 16) => {
+  const date = new Date(now);
+  date.setUTCDate(date.getUTCDate() + daysFromNow);
+  date.setUTCHours(hour, 0, 0, 0);
+  return date.toISOString();
+};
+
+export const demoOrganization: Organization = { id: "org_casebridge_demo", name: "CaseBridge Demo Shelter Network", status: "active", settings: { allowAI: true, allowVoiceNotes: true, dataRetentionMonths: 24, requireSupervisorReviewForHighRisk: true, clientIdentifierMode: "client_code" }, createdAt: isoDaysAgo(540), updatedAt: isoDaysAgo(1) };
+
+export const demoSites: Site[] = [
+  { id: "site_downtown", organizationId: demoOrganization.id, name: "Downtown Shelter", address: "125 Main St, Metro City", type: "shelter", status: "active", createdAt: isoDaysAgo(510), updatedAt: isoDaysAgo(2) },
+  { id: "site_east", organizationId: demoOrganization.id, name: "East Site", address: "480 East Ave, Metro City", type: "outreach_hub", status: "active", createdAt: isoDaysAgo(430), updatedAt: isoDaysAgo(3) },
+];
+
+export const demoUsers: UserProfile[] = [
+  { id: "demo_admin", organizationId: demoOrganization.id, siteIds: ["site_downtown", "site_east"], firstName: "Demo", lastName: "Admin", email: "admin@demo.local", role: "admin", title: "System Administrator", status: "active", createdAt: isoDaysAgo(300), updatedAt: isoDaysAgo(1) },
+  { id: "demo_manager", organizationId: demoOrganization.id, siteIds: ["site_downtown", "site_east"], firstName: "Demo", lastName: "Manager", email: "manager@demo.local", role: "manager", title: "Program Manager", status: "active", createdAt: isoDaysAgo(300), updatedAt: isoDaysAgo(1) },
+  { id: "demo_ssa", organizationId: demoOrganization.id, siteIds: ["site_downtown", "site_east"], firstName: "Demo", lastName: "Supervisor", email: "ssa@demo.local", role: "ssa", title: "SSA / Supervisor", status: "active", createdAt: isoDaysAgo(300), updatedAt: isoDaysAgo(1) },
+  { id: "demo_caseworker", organizationId: demoOrganization.id, siteIds: ["site_downtown"], firstName: "Demo", lastName: "Caseworker", email: "caseworker@demo.local", role: "caseworker", title: "Shelter Caseworker", status: "active", createdAt: isoDaysAgo(300), updatedAt: isoDaysAgo(1) },
+  { id: "user_sarah", organizationId: demoOrganization.id, siteIds: ["site_downtown"], firstName: "Sarah", lastName: "Jenkins", email: "sarah.jenkins@demo.local", role: "caseworker", title: "Housing Caseworker", status: "active", createdAt: isoDaysAgo(270), updatedAt: isoDaysAgo(3) },
+  { id: "user_mike", organizationId: demoOrganization.id, siteIds: ["site_downtown", "site_east"], firstName: "Mike", lastName: "Chen", email: "mike.chen@demo.local", role: "caseworker", title: "Outreach Caseworker", status: "active", createdAt: isoDaysAgo(240), updatedAt: isoDaysAgo(2) },
+  { id: "user_aisha", organizationId: demoOrganization.id, siteIds: ["site_east"], firstName: "Aisha", lastName: "Patel", email: "aisha.patel@demo.local", role: "ssa", title: "Site Supervisor", status: "active", createdAt: isoDaysAgo(220), updatedAt: isoDaysAgo(1) },
+  { id: "user_daniel", organizationId: demoOrganization.id, siteIds: ["site_downtown"], firstName: "Daniel", lastName: "Roberts", email: "daniel.roberts@demo.local", role: "manager", title: "Regional Manager", status: "active", createdAt: isoDaysAgo(350), updatedAt: isoDaysAgo(1) },
+];
+
+const clientSeeds: Array<Pick<Client, "id" | "siteId" | "displayName" | "clientCode" | "assignedWorkerIds" | "status" | "priority" | "currentGoal"> & { lastContactDays: number; followUpOffset: number }> = [
+  { id: "client_1001", displayName: "Jordan A.", clientCode: "CB-1001", siteId: "site_downtown", assignedWorkerIds: ["demo_caseworker"], status: "active", priority: "high", currentGoal: "Complete housing application and obtain ID replacement.", lastContactDays: 1, followUpOffset: 0 },
+  { id: "client_1002", displayName: "Maria L.", clientCode: "CB-1002", siteId: "site_downtown", assignedWorkerIds: ["demo_caseworker", "user_sarah"], status: "follow_up_needed", priority: "high", currentGoal: "Reconnect with income support worker after benefits interruption.", lastContactDays: 8, followUpOffset: -1 },
+  { id: "client_1003", displayName: "Trevor N.", clientCode: "CB-1003", siteId: "site_east", assignedWorkerIds: ["user_mike"], status: "intake", priority: "medium", currentGoal: "Stabilize shelter placement and schedule health intake.", lastContactDays: 2, followUpOffset: 2 },
+  { id: "client_1004", displayName: "Ashley P.", clientCode: "CB-1004", siteId: "site_downtown", assignedWorkerIds: ["demo_caseworker"], status: "active", priority: "medium", currentGoal: "Submit supportive housing documents and landlord references.", lastContactDays: 4, followUpOffset: 1 },
+  { id: "client_1005", displayName: "Samuel R.", clientCode: "CB-1005", siteId: "site_east", assignedWorkerIds: ["user_mike", "demo_ssa"], status: "active", priority: "high", currentGoal: "Maintain medication plan and weekly clinical check-ins.", lastContactDays: 6, followUpOffset: 0 },
+  { id: "client_1006", displayName: "Nadia K.", clientCode: "CB-1006", siteId: "site_downtown", assignedWorkerIds: ["user_sarah"], status: "housed", priority: "low", currentGoal: "Complete 30-day housing stabilization follow-up.", lastContactDays: 3, followUpOffset: 7 },
+  { id: "client_1007", displayName: "Elias T.", clientCode: "CB-1007", siteId: "site_east", assignedWorkerIds: ["user_mike"], status: "discharged", priority: "low", currentGoal: "Closed - exited to family reunification.", lastContactDays: 20, followUpOffset: 30 },
+  { id: "client_1008", displayName: "Patricia B.", clientCode: "CB-1008", siteId: "site_downtown", assignedWorkerIds: ["demo_caseworker"], status: "inactive", priority: "medium", currentGoal: "Re-engagement outreach after missed appointments.", lastContactDays: 16, followUpOffset: -5 },
+  { id: "client_1009", displayName: "Leo D.", clientCode: "CB-1009", siteId: "site_east", assignedWorkerIds: ["demo_caseworker", "user_mike"], status: "active", priority: "high", currentGoal: "Address legal barriers and secure employment readiness referral.", lastContactDays: 9, followUpOffset: -2 },
+  { id: "client_1010", displayName: "Renee S.", clientCode: "CB-1010", siteId: "site_downtown", assignedWorkerIds: ["user_sarah"], status: "follow_up_needed", priority: "medium", currentGoal: "Complete outstanding documentation for health coverage.", lastContactDays: 10, followUpOffset: 0 },
+  { id: "client_1011", displayName: "Oscar H.", clientCode: "CB-1011", siteId: "site_east", assignedWorkerIds: ["demo_caseworker"], status: "intake", priority: "medium", currentGoal: "Develop first 14-day stabilization and safety plan.", lastContactDays: 1, followUpOffset: 3 },
+  { id: "client_1012", displayName: "Kim W.", clientCode: "CB-1012", siteId: "site_downtown", assignedWorkerIds: ["demo_caseworker", "demo_ssa"], status: "active", priority: "high", currentGoal: "Reduce crisis episodes and maintain daily outreach contact.", lastContactDays: 0, followUpOffset: 0 },
+];
+
+export const demoClients: Client[] = clientSeeds.map((seed, index) => ({
+  id: seed.id,
+  organizationId: demoOrganization.id,
+  siteId: seed.siteId,
+  displayName: seed.displayName,
+  clientCode: seed.clientCode,
+  assignedWorkerIds: [...seed.assignedWorkerIds],
+  status: seed.status,
+  priority: seed.priority,
+  currentGoal: seed.currentGoal,
+  lastContactAt: isoDaysAgo(seed.lastContactDays),
+  nextFollowUpAt: isoDaysFromNow(seed.followUpOffset),
+  createdAt: isoDaysAgo(160 - index * 4),
+  updatedAt: isoDaysAgo(Math.max(0, seed.lastContactDays - 1)),
+  createdById: "demo_ssa",
+}));
+
+export const demoCaseNotes: CaseNote[] = Array.from({ length: 20 }, (_, i) => {
+  const client = demoClients[i % demoClients.length];
+  const categories: CaseNote["category"][] = ["housing", "income_support", "mental_health", "medical_health", "system_navigation"];
+  const contactTypes: CaseNote["contactType"][] = ["in_person", "phone", "outreach", "referral_support", "informal_check_in"];
+  return { id: `note_${i + 1}`, organizationId: demoOrganization.id, siteId: client.siteId, clientId: client.id, authorId: ["demo_caseworker", "user_sarah", "user_mike"][i % 3], contactDate: isoDaysAgo((i % 11) + 1, 10 + (i % 6)), contactType: contactTypes[i % contactTypes.length], category: categories[i % categories.length], location: i % 2 === 0 ? "On-site office" : "Community outreach", roughSummary: `Client check-in covering ${categories[i % categories.length].replace("_", " ")} needs and next actions.`, actionsTaken: "Reviewed current plan, documented barriers, and confirmed next contact.", referralsMade: i % 4 === 0 ? "Housing Navigation Program" : "", followUpRequired: i % 3 !== 0, riskSafetyConcerns: i % 5 === 0 ? "Client reported anxiety related to shelter transition." : "", finalNote: "Client reported current barriers and identified practical next steps. Staff confirmed follow-up actions and support options.", aiGenerated: i % 2 === 0, aiActionUsed: i % 2 === 0 ? "Generate SMIS-style note" : undefined, supervisorReviewed: i % 6 === 0, createdAt: isoDaysAgo((i % 12) + 1), updatedAt: isoDaysAgo(i % 10) };
+});
+
+export const demoTasks: Task[] = Array.from({ length: 20 }, (_, i) => {
+  const client = demoClients[i % demoClients.length];
+  const statuses: Task["status"][] = ["open", "in_progress", "completed", "overdue", "open"];
+  const priorities: Task["priority"][] = ["high", "medium", "low", "high", "medium"];
+  const status = statuses[i % statuses.length];
+  const dueOffset = i % 5 === 0 ? 0 : i % 4 === 0 ? -2 : i % 3 === 0 ? -1 : i % 2 === 0 ? 1 : 3;
+  return { id: `task_${i + 1}`, organizationId: demoOrganization.id, siteId: client.siteId, clientId: client.id, assignedToId: client.assignedWorkerIds[0], createdById: "demo_ssa", title: i % 2 === 0 ? "Follow up on referral response" : "Client check-in and documentation", description: "Complete scheduled casework action and update client timeline.", dueDate: isoDaysFromNow(dueOffset, 17), priority: priorities[i % priorities.length], status, completedAt: status === "completed" ? isoDaysAgo(1) : undefined, createdAt: isoDaysAgo(15 + i), updatedAt: isoDaysAgo(Math.max(0, dueOffset < 0 ? 1 : 0)) };
+});
+
+export const demoReferrals: Referral[] = Array.from({ length: 15 }, (_, i) => {
+  const client = demoClients[i % demoClients.length];
+  const types = ["housing", "income_support", "id_replacement", "mental_health", "substance_use_support", "medical", "legal", "employment"];
+  const statuses: Referral["status"][] = ["pending", "completed", "no_response", "pending", "declined"];
+  return { id: `referral_${i + 1}`, organizationId: demoOrganization.id, siteId: client.siteId, clientId: client.id, createdById: client.assignedWorkerIds[0], referralType: types[i % types.length], agencyName: ["Metro Housing Access", "City Income Desk", "ID Clinic", "Community Health Collective"][i % 4], contactPerson: ["J. Brooks", "R. Gomez", "S. Turner", "L. Shah"][i % 4], contactInfo: "demo-agency@local.org", referralDate: isoDaysAgo((i % 20) + 1), status: statuses[i % statuses.length], followUpDate: isoDaysFromNow((i % 5) - 1), outcome: statuses[i % statuses.length] === "completed" ? "Connected to service intake." : undefined, createdAt: isoDaysAgo((i % 20) + 1), updatedAt: isoDaysAgo(i % 8) };
+});
+
+export const demoRiskFlags: RiskFlag[] = [
+  { id: "risk_1", organizationId: demoOrganization.id, siteId: "site_downtown", clientId: "client_1002", createdById: "demo_caseworker", category: "housing instability", severity: "high", description: "Missed two housing follow-up appointments.", active: true, supervisorReviewRequired: true, createdAt: isoDaysAgo(4), updatedAt: isoDaysAgo(2) },
+  { id: "risk_2", organizationId: demoOrganization.id, siteId: "site_east", clientId: "client_1005", createdById: "user_mike", category: "behavioral health", severity: "medium", description: "Increased distress reported during outreach.", active: true, supervisorReviewRequired: true, createdAt: isoDaysAgo(2), updatedAt: isoDaysAgo(1) },
+  { id: "risk_3", organizationId: demoOrganization.id, siteId: "site_downtown", clientId: "client_1012", createdById: "demo_caseworker", category: "safety concern", severity: "high", description: "Escalating conflict with peer at shelter.", active: true, supervisorReviewRequired: true, createdAt: isoDaysAgo(1), updatedAt: isoDaysAgo(0) },
+  { id: "risk_4", organizationId: demoOrganization.id, siteId: "site_downtown", clientId: "client_1004", createdById: "user_sarah", category: "medical adherence", severity: "medium", description: "Difficulty attending appointments.", active: true, supervisorReviewRequired: false, createdAt: isoDaysAgo(5), updatedAt: isoDaysAgo(3) },
+  { id: "risk_5", organizationId: demoOrganization.id, siteId: "site_east", clientId: "client_1009", createdById: "demo_ssa", category: "legal risk", severity: "high", description: "Upcoming legal date requires coordinated planning.", active: true, supervisorReviewRequired: true, createdAt: isoDaysAgo(6), updatedAt: isoDaysAgo(2) },
+  { id: "risk_6", organizationId: demoOrganization.id, siteId: "site_downtown", clientId: "client_1006", createdById: "user_sarah", category: "transition support", severity: "low", description: "Needs extra housing stabilization contact.", active: false, supervisorReviewRequired: false, resolvedAt: isoDaysAgo(7), createdAt: isoDaysAgo(15), updatedAt: isoDaysAgo(7) },
+  { id: "risk_7", organizationId: demoOrganization.id, siteId: "site_east", clientId: "client_1003", createdById: "user_mike", category: "substance use", severity: "medium", description: "Client requested voluntary support resources.", active: false, supervisorReviewRequired: false, resolvedAt: isoDaysAgo(5), createdAt: isoDaysAgo(11), updatedAt: isoDaysAgo(5) },
+  { id: "risk_8", organizationId: demoOrganization.id, siteId: "site_downtown", clientId: "client_1008", createdById: "demo_caseworker", category: "no contact", severity: "low", description: "No successful check-in for over two weeks.", active: true, supervisorReviewRequired: false, createdAt: isoDaysAgo(3), updatedAt: isoDaysAgo(1) },
+];
+
+export const demoSafetyPlans: SafetyPlan[] = [
+  { id: "safety_1", organizationId: demoOrganization.id, siteId: "site_downtown", clientId: "client_1002", createdById: "demo_caseworker", concernSummary: "Client reports elevated stress and disrupted sleep.", triggers: "Uncertain housing outcomes and missed benefit appointment.", copingStrategies: "Scheduled breathing exercise, daily check-in with peer support worker.", supports: "SSA check-in twice weekly and crisis line on request.", staffActions: "Coordinate housing navigator follow-up and monitor missed appointments.", emergencySteps: "Contact on-call supervisor and emergency supports if escalation occurs.", clientAgreed: true, reviewDate: isoDaysFromNow(2), status: "review_due", createdAt: isoDaysAgo(8), updatedAt: isoDaysAgo(2) },
+  { id: "safety_2", organizationId: demoOrganization.id, siteId: "site_east", clientId: "client_1005", createdById: "demo_ssa", concernSummary: "Client managing anxiety symptoms while in congregate setting.", triggers: "Crowded intake periods and sleep disruptions.", copingStrategies: "Quiet room access and stepped support check-ins.", supports: "Clinical referral and weekly outreach touchpoint.", staffActions: "Track triggers and reinforce coping plan during outreach.", emergencySteps: "Escalate to clinical partner if safety concerns increase.", clientAgreed: true, reviewDate: isoDaysFromNow(7), status: "active", createdAt: isoDaysAgo(12), updatedAt: isoDaysAgo(1) },
+  { id: "safety_3", organizationId: demoOrganization.id, siteId: "site_downtown", clientId: "client_1012", createdById: "demo_caseworker", concernSummary: "Conflict de-escalation support needed.", triggers: "Interpersonal conflict and crowded dorm area.", copingStrategies: "Time-out protocol and staff-mediated dialogue.", supports: "Daily supervisor check-in for one week.", staffActions: "Document incidents and complete supervisory review.", emergencySteps: "Immediate supervisor engagement if threats occur.", clientAgreed: true, reviewDate: isoDaysFromNow(1), status: "active", createdAt: isoDaysAgo(3), updatedAt: isoDaysAgo(0) },
+  { id: "safety_4", organizationId: demoOrganization.id, siteId: "site_east", clientId: "client_1009", createdById: "user_mike", concernSummary: "Legal stress contributing to instability.", triggers: "Upcoming hearing reminders.", copingStrategies: "Accompaniment planning and coaching calls.", supports: "Legal clinic and SSA consult.", staffActions: "Coordinate legal referral and transportation support.", emergencySteps: "Engage crisis intervention if client reports acute distress.", clientAgreed: true, reviewDate: isoDaysFromNow(5), status: "review_due", createdAt: isoDaysAgo(6), updatedAt: isoDaysAgo(1) },
+  { id: "safety_5", organizationId: demoOrganization.id, siteId: "site_downtown", clientId: "client_1006", createdById: "user_sarah", concernSummary: "Post-housing transition supports completed.", triggers: "Initial lease-up adjustment period.", copingStrategies: "Weekly check-ins and landlord liaison.", supports: "Community tenancy support worker.", staffActions: "Close plan and transition to standard follow-up.", emergencySteps: "Re-open plan if instability returns.", clientAgreed: true, reviewDate: isoDaysAgo(10), status: "closed", createdAt: isoDaysAgo(45), updatedAt: isoDaysAgo(10) },
+];
+
+export const demoSupervisorReviews: SupervisorReview[] = Array.from({ length: 8 }, (_, i) => ({ id: `review_${i + 1}`, organizationId: demoOrganization.id, siteId: i % 2 === 0 ? "site_downtown" : "site_east", clientId: demoClients[i].id, caseNoteId: demoCaseNotes[i].id, riskFlagId: i < demoRiskFlags.length ? demoRiskFlags[i].id : undefined, supervisorId: i % 2 === 0 ? "demo_ssa" : "user_aisha", workerId: demoClients[i].assignedWorkerIds[0], reviewType: i % 3 === 0 ? "risk_flag" : i % 3 === 1 ? "case_note" : "general", comment: i % 2 === 0 ? "Please add follow-up detail and confirm referral contact date." : "Good documentation. Continue weekly follow-up cadence.", actionRequired: i % 2 === 0, actionDueDate: i % 2 === 0 ? isoDaysFromNow(2) : undefined, completedAt: i % 2 === 0 ? undefined : isoDaysAgo(1), createdAt: isoDaysAgo(7 - (i % 4)), updatedAt: isoDaysAgo(i % 3) }));
+
+export const demoAuditLogs: AuditLog[] = Array.from({ length: 15 }, (_, i) => ({ id: `audit_${i + 1}`, organizationId: demoOrganization.id, siteId: i % 2 === 0 ? "site_downtown" : "site_east", userId: ["demo_caseworker", "demo_ssa", "demo_manager", "demo_admin"][i % 4], action: ["create_case_note", "create_task", "create_referral", "review_risk_flag", "update_client"][i % 5], entityType: ["caseNote", "task", "referral", "riskFlag", "client"][i % 5], entityId: [demoCaseNotes[0].id, demoTasks[0].id, demoReferrals[0].id, demoRiskFlags[0].id, demoClients[0].id][i % 5], timestamp: isoDaysAgo(i % 9, 9 + (i % 8)), metadata: { source: "demo", index: i + 1 } }));
+
+export const demoOutcomes = [
+  { month: "2026-01", intakes: 12, housed: 4, discharged: 2, active: 38 },
+  { month: "2026-02", intakes: 14, housed: 5, discharged: 3, active: 41 },
+  { month: "2026-03", intakes: 16, housed: 6, discharged: 2, active: 45 },
+  { month: "2026-04", intakes: 18, housed: 8, discharged: 4, active: 49 },
+];

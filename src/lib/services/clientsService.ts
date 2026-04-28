@@ -4,6 +4,9 @@ import { collection, doc, getDoc, getDocs, orderBy, query, setDoc, updateDoc, wh
 import { auditLogsService } from './auditLogsService';
 import { ensureOrgAccess, ensureSiteAccess, ServiceError } from './serviceHelpers';
 import { mockClients } from '../mockData';
+import { isDemoMode } from '../demo/demoMode';
+import { addDemoClient } from '../demo/demoStore';
+import { getDemoClientById, getDemoClientsForUser } from '../demo/demoServices';
 
 const COLLECTION_NAME = 'clients';
 
@@ -14,6 +17,9 @@ export const clientsService = {
   },
 
   async getClientsForUser(userProfile: UserProfile): Promise<Client[]> {
+    if (isDemoMode()) {
+      return getDemoClientsForUser({ id: userProfile.id, organizationId: userProfile.organizationId, role: userProfile.role, siteIds: userProfile.siteIds });
+    }
     if (userProfile.role === 'caseworker') {
       return this.getAssignedClients(userProfile.id, userProfile.organizationId);
     }
@@ -23,6 +29,9 @@ export const clientsService = {
 
   async getAssignedClients(userId: string, organizationId: string): Promise<Client[]> {
     if (isMock) return mockClients;
+    if (isDemoMode()) {
+      return getDemoClientsForUser({ id: userId, organizationId, role: 'caseworker', siteIds: [] });
+    }
     const snapshot = await getDocs(
       query(
         collection(db, COLLECTION_NAME),
@@ -37,6 +46,9 @@ export const clientsService = {
 
   async getClientsBySite(organizationId: string, siteIds: string[]): Promise<Client[]> {
     if (isMock) return mockClients;
+    if (isDemoMode()) {
+      return getDemoClientsForUser({ id: 'demo_scope', organizationId, role: 'manager', siteIds });
+    }
     if (!siteIds.length) return [];
 
     const snapshot = await getDocs(
@@ -53,6 +65,7 @@ export const clientsService = {
 
   async getClientById(clientId: string, actor: ServiceActor): Promise<Client | null> {
     if (isMock) return mockClients.find(c => c.id === clientId) || mockClients[0];
+    if (isDemoMode()) return getDemoClientById(clientId, actor);
     const client = await this.getClient(clientId);
     if (!client) return null;
 
@@ -72,6 +85,12 @@ export const clientsService = {
   async createClient(data: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>, actor: ServiceActor): Promise<Client> {
     ensureOrgAccess(actor, data.organizationId);
     ensureSiteAccess(actor, data.siteId);
+
+    if (isDemoMode()) {
+      const client = addDemoClient({ ...data, id: `demo_client_${crypto.randomUUID()}` });
+      await auditLogsService.writeAuditLog({ organizationId: client.organizationId, siteId: client.siteId, userId: actor.id, action: 'create_client', entityType: 'client', entityId: client.id, metadata: { assignedWorkerIds: client.assignedWorkerIds, source: 'demo' } });
+      return client;
+    }
 
     const ref = doc(collection(db, COLLECTION_NAME));
     const timestamp = new Date().toISOString();
@@ -102,6 +121,10 @@ export const clientsService = {
     const client = await this.getClientById(clientId, actor);
     if (!client) throw new ServiceError('Client not found.');
 
+    if (isDemoMode()) {
+      return;
+    }
+
     await updateDoc(doc(db, COLLECTION_NAME, clientId), {
       ...data,
       updatedAt: new Date().toISOString(),
@@ -124,6 +147,10 @@ export const clientsService = {
 
     if (actor.role === 'caseworker') {
       throw new ServiceError('Caseworkers cannot reassign clients.');
+    }
+
+    if (isDemoMode()) {
+      return;
     }
 
     await updateDoc(doc(db, COLLECTION_NAME, clientId), {

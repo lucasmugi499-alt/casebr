@@ -2,9 +2,12 @@ import { DashboardMetric, ServiceActor } from '@/types';
 import { caseNotesService } from './caseNotesService';
 import { clientsService } from './clientsService';
 import { tasksService } from './tasksService';
+import { isDemoMode } from '../demo/demoMode';
+import { getDemoCaseworkerDashboard, getDemoManagementDashboard, getDemoSupervisorDashboard } from '../demo/demoServices';
 
 export const dashboardService = {
   async getCaseworkerDashboard(actor: ServiceActor) {
+    if (isDemoMode()) return getDemoCaseworkerDashboard(actor);
     const [assignedClients, overdueTasks, notesThisWeek] = await Promise.all([
       clientsService.getAssignedClients(actor.id, actor.organizationId),
       tasksService.getOverdueTasks(actor),
@@ -23,12 +26,16 @@ export const dashboardService = {
       { label: 'Notes completed this week', value: notesThisWeek.length },
     ];
 
-    return {
-      metrics,
-      assignedClients,
-      highPriorityClients: highPriority,
-      overdueTasks,
-      notesThisWeek,
-    };
+    return { metrics, assignedClients, highPriorityClients: highPriority, overdueTasks, notesThisWeek };
+  },
+
+  async getSupervisorDashboard(actor: ServiceActor) {
+    if (isDemoMode()) return getDemoSupervisorDashboard(actor);
+    return null;
+  },
+
+  async getManagementDashboard(actor: ServiceActor) {
+    if (isDemoMode()) return getDemoManagementDashboard(actor);
+    return null;
   },
 };

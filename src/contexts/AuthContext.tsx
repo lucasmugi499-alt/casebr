@@ -6,58 +6,7 @@ import { auth, db } from "@/lib/firebase/client";
 import { doc, getDoc } from "firebase/firestore";
 import { User } from "@/types";
 import { useRouter } from "next/navigation";
-
-// Development-only demo access. Do not enable in production.
-const getDemoProfile = (role: string): User | null => {
-  if (process.env.NODE_ENV !== "development") return null;
-  const now = new Date().toISOString();
-  if (role === "caseworker") {
-    return {
-      id: "demo_caseworker",
-      organizationId: "org_casebridge_demo",
-      siteIds: ["site_downtown"],
-      firstName: "Demo",
-      lastName: "Caseworker",
-      email: "caseworker@demo.local",
-      role: "caseworker",
-      title: "Shelter Caseworker",
-      status: "active",
-      createdAt: now,
-      updatedAt: now,
-    };
-  }
-  if (role === "ssa") {
-    return {
-      id: "demo_ssa",
-      organizationId: "org_casebridge_demo",
-      siteIds: ["site_downtown", "site_east"],
-      firstName: "Demo",
-      lastName: "Supervisor",
-      email: "ssa@demo.local",
-      role: "ssa",
-      title: "SSA / Supervisor",
-      status: "active",
-      createdAt: now,
-      updatedAt: now,
-    };
-  }
-  if (role === "manager") {
-    return {
-      id: "demo_manager",
-      organizationId: "org_casebridge_demo",
-      siteIds: ["site_downtown", "site_east"],
-      firstName: "Demo",
-      lastName: "Manager",
-      email: "manager@demo.local",
-      role: "manager",
-      title: "Program Manager",
-      status: "active",
-      createdAt: now,
-      updatedAt: now,
-    };
-  }
-  return null;
-};
+import { exitDemoMode, getDemoUserProfile, isDemoMode } from "@/lib/demo/demoMode";
 
 interface AuthContextType {
   user: User | null;
@@ -85,14 +34,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadProfile = useCallback(async (fUser: FirebaseUser | null) => {
     if (!fUser) {
-      if (process.env.NODE_ENV === "development") {
-        const demoRole = localStorage.getItem("casebridge_demo_role");
-        if (demoRole) {
-          const demoUser = getDemoProfile(demoRole);
-          if (demoUser) {
-            setUser(demoUser);
-            return;
-          }
+      if (isDemoMode()) {
+        const demoUser = getDemoUserProfile();
+        if (demoUser) {
+          setUser(demoUser);
+          return;
         }
       }
       setUser(null);
@@ -131,8 +77,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadProfile]);
 
   const signOut = async () => {
-    if (process.env.NODE_ENV === "development") {
-      localStorage.removeItem("casebridge_demo_role");
+    if (isDemoMode()) {
+      exitDemoMode();
     }
     await firebaseSignOut(auth);
     setUser(null);
@@ -143,9 +89,5 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await loadProfile(auth.currentUser);
   };
 
-  return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading, signOut, refreshProfile }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ user, firebaseUser, loading, signOut, refreshProfile }}>{children}</AuthContext.Provider>;
 }

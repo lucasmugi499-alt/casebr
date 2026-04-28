@@ -26,7 +26,7 @@ export default function AuthGuard({
       return;
     }
 
-    if (allowedRoles && !allowedRoles.includes(user.role)) {
+    if (user && allowedRoles && !allowedRoles.includes(user.role)) {
       router.push(getHomeRouteForRole(user.role));
     }
   }, [user, firebaseUser, loading, router, allowedRoles]);
