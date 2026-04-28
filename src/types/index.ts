@@ -234,7 +234,19 @@ export interface AuditLog {
 
 export interface TimelineItem {
   id: string;
-  type: 'case_note' | 'task' | 'referral' | 'risk_flag' | 'safety_plan' | 'supervisor_review';
+  type:
+    | 'case_note'
+    | 'task'
+    | 'referral'
+    | 'risk_flag'
+    | 'safety_plan'
+    | 'supervisor_review'
+    | 'workstream_update'
+    | 'housing_plan'
+    | 'service_plan'
+    | 'document_checklist'
+    | 'status_change'
+    | 'supervisor_review';
   date: string;
   title: string;
   summary: string;
@@ -242,6 +254,8 @@ export interface TimelineItem {
   staffName?: string;
   entityId: string;
   entityType: string;
+  relatedWorkstream?: WorkstreamType;
+  status?: string;
 }
 
 export interface DashboardMetric {
@@ -256,4 +270,148 @@ export interface ServiceActor {
   organizationId: string;
   role: Role;
   siteIds: string[];
+}
+
+export type WorkstreamType =
+  | 'housing'
+  | 'income_benefits'
+  | 'identification_documents'
+  | 'health_medical'
+  | 'mental_health'
+  | 'substance_use_support'
+  | 'legal'
+  | 'employment'
+  | 'family_supports'
+  | 'safety'
+  | 'life_skills'
+  | 'other';
+
+export type WorkstreamStatus =
+  | 'not_started'
+  | 'in_progress'
+  | 'waiting_on_client'
+  | 'waiting_on_agency'
+  | 'blocked'
+  | 'completed'
+  | 'paused'
+  | 'closed';
+
+export interface Workstream {
+  id: string;
+  clientId: string;
+  type: WorkstreamType;
+  status: WorkstreamStatus;
+  latestAction: string;
+  nextAction: string;
+  dueDate?: string;
+  assignedWorkerId: string;
+  linkedNoteIds: string[];
+  linkedTaskIds: string[];
+  linkedReferralIds: string[];
+  priority: Priority;
+  updatedAt: string;
+}
+
+export type ClientNeedType =
+  | 'housing_support'
+  | 'income_benefits_support'
+  | 'identification_documents_support'
+  | 'health_medical_support'
+  | 'mental_health_support'
+  | 'substance_use_support'
+  | 'legal_support'
+  | 'employment_support'
+  | 'safety_planning'
+  | 'family_community_supports'
+  | 'life_skills_support'
+  | 'discharge_transition_planning'
+  | 'appointment_accompaniment'
+  | 'referral_follow_up';
+
+export type NeedStatus =
+  | 'identified'
+  | 'in_progress'
+  | 'waiting_on_client'
+  | 'waiting_on_agency'
+  | 'blocked'
+  | 'completed'
+  | 'closed';
+
+export type NeedPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface ClientNeed {
+  id: string;
+  clientId: string;
+  needType: ClientNeedType;
+  status: NeedStatus;
+  priority: NeedPriority;
+  sourceOfNeed: string;
+  dateIdentified: string;
+  identifiedBy: string;
+  linkedWorkstreamId?: string;
+  recommendedNextAction: string;
+  relatedDocumentTypes: GeneratedDocumentType[];
+  relatedTaskIds: string[];
+  relatedReferralIds: string[];
+}
+
+export type GeneratedDocumentType =
+  | 'housing_plan'
+  | 'safety_plan'
+  | 'service_plan'
+  | 'intake_assessment'
+  | 'document_checklist'
+  | 'discharge_transition_plan'
+  | 'supervisor_summary'
+  | 'case_summary';
+
+export type GeneratedDocumentStatus = 'draft' | 'completed' | 'copied_to_smis' | 'review_due' | 'archived';
+
+export interface GeneratedDocument {
+  id: string;
+  clientId: string;
+  organizationId: string;
+  siteId: string;
+  type: GeneratedDocumentType;
+  title: string;
+  status: GeneratedDocumentStatus;
+  generatedText: string;
+  sourceAnswers: Record<string, unknown>;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  copiedToSmisAt?: string;
+  reviewDate?: string;
+}
+
+export interface DocumentationChecklist {
+  clientId: string;
+  intakeCompleted: boolean;
+  consentCompleted: boolean;
+  privacyExplained: boolean;
+  servicePlanStarted: boolean;
+  housingPlanStarted: boolean;
+  safetyScreeningCompleted: boolean;
+  idStatusDocumented: boolean;
+  incomeStatusDocumented: boolean;
+  emergencyContactDocumented: boolean;
+  referralsDocumented: boolean;
+  dischargeTransitionPlanDocumented: boolean;
+  updatedAt: string;
+}
+
+export type DocumentChecklistStatus = 'complete' | 'missing' | 'requested' | 'not_applicable';
+
+export interface DocumentChecklist {
+  clientId: string;
+  governmentId: DocumentChecklistStatus;
+  healthCard: DocumentChecklistStatus;
+  sin: DocumentChecklistStatus;
+  proofOfIncome: DocumentChecklistStatus;
+  noticeOfAssessment: DocumentChecklistStatus;
+  housingDocuments: DocumentChecklistStatus;
+  medicalDocuments: DocumentChecklistStatus;
+  legalDocuments: DocumentChecklistStatus;
+  other: DocumentChecklistStatus;
+  updatedAt: string;
 }

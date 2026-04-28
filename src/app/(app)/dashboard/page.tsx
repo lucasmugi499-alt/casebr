@@ -1,21 +1,38 @@
 "use client";
 
 import AuthGuard from "@/components/AuthGuard";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { buttonVariants } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { dashboardService } from "@/lib/services/dashboardService";
-import { AlertCircle, CalendarClock, FileText, Plus, Users } from "lucide-react";
+import { CaseNote, Client, Task } from "@/types";
+import { AlertCircle, CalendarClock, FileText, Plus, ShieldAlert, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Client, Task } from "@/types";
+
+interface PriorityQueueItem {
+  key: string;
+  clientId: string;
+  clientName: string;
+  clientCode: string;
+  priority: string;
+  reason: string;
+  nextAction: string;
+  dueDate: string;
+  workstream: string;
+  badge: string;
+  risk: string;
+  lastContactAt: string;
+}
 
 interface DashboardData {
   metrics: { label: string; value: number }[];
   assignedClients: Client[];
-  highPriorityClients: Client[];
   overdueTasks: Task[];
+  notesThisWeek: CaseNote[];
+  todayPriorityQueue: PriorityQueueItem[];
 }
 
 export default function CaseworkerDashboard() {
@@ -38,7 +55,7 @@ export default function CaseworkerDashboard() {
       })
       .then((result) => {
         if (!active) return;
-        setData(result);
+        setData(result as DashboardData);
       })
       .catch((err: unknown) => {
         if (!active) return;
@@ -54,28 +71,26 @@ export default function CaseworkerDashboard() {
     };
   }, [user]);
 
-  const metricIcons = useMemo(
-    () => [Users, CalendarClock, AlertCircle, AlertCircle, FileText],
-    []
-  );
+  const metricIcons = useMemo(() => [Users, CalendarClock, AlertCircle, ShieldAlert, FileText], []);
 
   return (
     <AuthGuard allowedRoles={["caseworker"]}>
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Start of shift</h2>
-          <p className="text-muted-foreground">Today’s casework priorities and assigned client activity.</p>
+          <h2 className="text-2xl font-bold tracking-tight">Start of Shift</h2>
+          <p className="text-muted-foreground">Today’s priorities, client work, documentation, and follow-ups.</p>
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Link href="/clients" className={buttonVariants()}><Plus className="mr-2 h-4 w-4" />Add Case Note</Link>
+          <Link href="/clients/notes/new" className={buttonVariants()}><Plus className="mr-2 h-4 w-4" />Add Case Note</Link>
           <Link href="/clients/new" className={buttonVariants({ variant: "outline" })}><Plus className="mr-2 h-4 w-4" />Add Client</Link>
           <Link href="/tasks/new" className={buttonVariants({ variant: "outline" })}><Plus className="mr-2 h-4 w-4" />Add Follow-Up</Link>
+          <Link href="/clients" className={buttonVariants({ variant: "outline" })}><Plus className="mr-2 h-4 w-4" />Add Referral</Link>
+          <Link href="/risk" className={buttonVariants({ variant: "outline" })}><Plus className="mr-2 h-4 w-4" />Add Risk Flag</Link>
+          <Link href="/risk" className={buttonVariants({ variant: "outline" })}><Plus className="mr-2 h-4 w-4" />Add Safety Plan</Link>
         </div>
 
-        {loading && (
-          <div className="grid gap-4 md:grid-cols-5">{Array.from({ length: 5 }).map((_, idx) => <Skeleton key={idx} className="h-28" />)}</div>
-        )}
+        {loading && <div className="grid gap-4 md:grid-cols-4">{Array.from({ length: 8 }).map((_, idx) => <Skeleton key={idx} className="h-28" />)}</div>}
 
         {error && (
           <Card className="border-red-200">
@@ -86,9 +101,9 @@ export default function CaseworkerDashboard() {
 
         {!loading && data && (
           <>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               {data.metrics.map((metric, index) => {
-                const Icon = metricIcons[index] ?? Users;
+                const Icon = metricIcons[index % metricIcons.length] ?? Users;
                 return (
                   <Card key={metric.label}>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -103,27 +118,94 @@ export default function CaseworkerDashboard() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Assigned clients</CardTitle>
-                <CardDescription>Open a profile and add case notes directly from this list.</CardDescription>
+                <CardTitle>Today’s Priority Queue</CardTitle>
+                <CardDescription>Actions requiring attention today, including overdue, blocked, safety, and referral items.</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
+                {!data.todayPriorityQueue.length ? (
+                  <p className="text-sm text-muted-foreground">No urgent queue items right now.</p>
+                ) : data.todayPriorityQueue.slice(0, 12).map((item) => (
+                  <div key={item.key} className="rounded-md border p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium">{item.clientName}</p>
+                      <Badge variant="outline">{item.clientCode}</Badge>
+                      <Badge>{item.badge}</Badge>
+                      {item.risk && <Badge variant="destructive">Risk</Badge>}
+                    </div>
+                    <p className="text-sm mt-2"><span className="font-medium">Reason:</span> {item.reason}</p>
+                    <p className="text-sm text-muted-foreground">Next Action: {item.nextAction}</p>
+                    <p className="text-xs text-muted-foreground">Due: {new Date(item.dueDate).toLocaleDateString()} • Workstream: {item.workstream} • Last contact: {item.lastContactAt ? new Date(item.lastContactAt).toLocaleDateString() : "Not documented"}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Link href={`/clients/${item.clientId}`} className={buttonVariants({ variant: "outline", size: "sm" })}>Open Work File</Link>
+                      <Link href={`/clients/${item.clientId}/notes/new`} className={buttonVariants({ variant: "outline", size: "sm" })}>Add Note</Link>
+                      <Link href="/tasks" className={buttonVariants({ size: "sm" })}>Complete Action</Link>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Assigned Clients Workboard</CardTitle>
+                <CardDescription>Compact view of work in progress, follow-ups, and documentation status for each client.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
                 {!data.assignedClients.length ? (
                   <p className="text-sm text-muted-foreground">No clients are currently assigned to you.</p>
                 ) : (
-                  <div className="space-y-3">
-                    {data.assignedClients.slice(0, 8).map((client) => (
-                      <div key={client.id} className="flex items-center justify-between rounded-md border p-3">
-                        <div>
-                          <p className="font-medium">{client.displayName}</p>
-                          <p className="text-xs text-muted-foreground">{client.clientCode} • {client.priority} priority</p>
-                        </div>
-                        <Link href={`/clients/${client.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>Open client</Link>
+                  data.assignedClients.slice(0, 10).map((client) => (
+                    <div key={client.id} className="rounded-md border p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium">{client.displayName}</p>
+                        <Badge variant="outline">{client.clientCode}</Badge>
+                        <Badge>{client.status}</Badge>
+                        <Badge variant="secondary">{client.priority} priority</Badge>
                       </div>
-                    ))}
-                  </div>
+                      <p className="text-sm mt-2">Current goal: {client.currentGoal || "Not documented"}</p>
+                      <p className="text-xs text-muted-foreground">Last contact: {client.lastContactAt ? new Date(client.lastContactAt).toLocaleDateString() : "Not documented"} • Next follow-up: {client.nextFollowUpAt ? new Date(client.nextFollowUpAt).toLocaleDateString() : "Not documented"}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Link href={`/clients/${client.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>Open Work File</Link>
+                        <Link href={`/clients/${client.id}/notes/new`} className={buttonVariants({ variant: "outline", size: "sm" })}>Add Note</Link>
+                        <Link href="/tasks/new" className={buttonVariants({ variant: "outline", size: "sm" })}>Add Task</Link>
+                        <Link href="/clients" className={buttonVariants({ variant: "outline", size: "sm" })}>Add Referral</Link>
+                      </div>
+                    </div>
+                  ))
                 )}
               </CardContent>
             </Card>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card>
+                <CardHeader><CardTitle>Recent Documentation</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  {data.notesThisWeek.slice(0, 6).map((note) => (
+                    <div key={note.id} className="rounded border p-3">
+                      <p className="text-xs text-muted-foreground">{new Date(note.contactDate).toLocaleDateString()} • {note.category} • {note.contactType}</p>
+                      <p className="text-sm line-clamp-2">{note.finalNote}</p>
+                      <div className="mt-2 flex items-center gap-2">
+                        {note.aiGenerated && <Badge variant="secondary">AI-assisted</Badge>}
+                        <Link href={`/clients/${note.clientId}`} className={buttonVariants({ size: "sm", variant: "outline" })}>Open client</Link>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>My Open Work</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  {data.overdueTasks.slice(0, 8).map((task) => (
+                    <div key={task.id} className="rounded border p-3">
+                      <p className="font-medium text-sm">{task.title}</p>
+                      <p className="text-xs text-muted-foreground">Due {new Date(task.dueDate).toLocaleDateString()} • {task.status} • {task.priority} priority</p>
+                      <Link href="/tasks" className={buttonVariants({ size: "sm", variant: "outline" })}>Open task</Link>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
           </>
         )}
       </div>

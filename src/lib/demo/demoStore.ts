@@ -1,13 +1,32 @@
-import { CaseNote, Client, Referral, RiskFlag, SafetyPlan, SupervisorReview, Task } from "@/types";
+import {
+  CaseNote,
+  Client,
+  ClientNeed,
+  DocumentationChecklist,
+  DocumentChecklist,
+  GeneratedDocument,
+  Referral,
+  RiskFlag,
+  SafetyPlan,
+  SupervisorReview,
+  Task,
+  TimelineItem,
+  Workstream,
+} from "@/types";
 import {
   demoAuditLogs,
   demoCaseNotes,
+  demoClientNeeds,
   demoClients,
+  demoDocumentationChecklists,
+  demoDocumentChecklists,
+  demoGeneratedDocuments,
   demoReferrals,
   demoRiskFlags,
   demoSafetyPlans,
   demoSupervisorReviews,
   demoTasks,
+  demoWorkstreams,
 } from "./demoData";
 
 const STORE_KEY = "casebridge_demo_store_v1";
@@ -20,6 +39,12 @@ export interface DemoStore {
   riskFlags: RiskFlag[];
   safetyPlans: SafetyPlan[];
   supervisorReviews: SupervisorReview[];
+  workstreams: Workstream[];
+  clientNeeds: ClientNeed[];
+  documentationChecklists: DocumentationChecklist[];
+  documentChecklists: DocumentChecklist[];
+  generatedDocuments: GeneratedDocument[];
+  timelineItems: TimelineItem[];
 }
 
 const baseStore: DemoStore = {
@@ -30,6 +55,12 @@ const baseStore: DemoStore = {
   riskFlags: demoRiskFlags,
   safetyPlans: demoSafetyPlans,
   supervisorReviews: demoSupervisorReviews,
+  workstreams: demoWorkstreams,
+  clientNeeds: demoClientNeeds,
+  documentationChecklists: demoDocumentationChecklists,
+  documentChecklists: demoDocumentChecklists,
+  generatedDocuments: demoGeneratedDocuments,
+  timelineItems: [],
 };
 
 const cloneBaseStore = (): DemoStore => ({
@@ -40,6 +71,12 @@ const cloneBaseStore = (): DemoStore => ({
   riskFlags: [...baseStore.riskFlags],
   safetyPlans: [...baseStore.safetyPlans],
   supervisorReviews: [...baseStore.supervisorReviews],
+  workstreams: [...baseStore.workstreams],
+  clientNeeds: [...baseStore.clientNeeds],
+  documentationChecklists: [...baseStore.documentationChecklists],
+  documentChecklists: [...baseStore.documentChecklists],
+  generatedDocuments: [...baseStore.generatedDocuments],
+  timelineItems: [...baseStore.timelineItems],
 });
 
 export const getDemoStore = (): DemoStore => {
@@ -140,3 +177,35 @@ export const addDemoSupervisorReview = (
 };
 
 export const getBaseAuditLogs = () => demoAuditLogs;
+
+export const upsertDemoGeneratedDocument = (document: GeneratedDocument): GeneratedDocument => {
+  const store = getDemoStore();
+  const existing = store.generatedDocuments.find((entry) => entry.id === document.id);
+  const nextDocs = existing
+    ? store.generatedDocuments.map((entry) => (entry.id === document.id ? { ...entry, ...document, updatedAt: new Date().toISOString() } : entry))
+    : [{ ...document, createdAt: document.createdAt ?? new Date().toISOString(), updatedAt: new Date().toISOString() }, ...store.generatedDocuments];
+  saveDemoStore({ ...store, generatedDocuments: nextDocs });
+  return nextDocs[0];
+};
+
+export const addDemoTimelineItem = (item: TimelineItem): TimelineItem => {
+  const store = getDemoStore();
+  const timelineItems = [{ ...item }, ...store.timelineItems];
+  saveDemoStore({ ...store, timelineItems });
+  return timelineItems[0];
+};
+
+export const updateDemoDocumentationChecklist = (
+  clientId: string,
+  updates: Partial<Omit<DocumentationChecklist, "clientId" | "updatedAt">>
+): DocumentationChecklist | null => {
+  const store = getDemoStore();
+  const existing = store.documentationChecklists.find((entry) => entry.clientId === clientId);
+  if (!existing) return null;
+  const updated = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+  saveDemoStore({
+    ...store,
+    documentationChecklists: store.documentationChecklists.map((entry) => (entry.clientId === clientId ? updated : entry)),
+  });
+  return updated;
+};

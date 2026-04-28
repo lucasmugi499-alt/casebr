@@ -3,6 +3,7 @@ import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, orde
 import { SafetyPlan } from "@/types";
 import { isDemoMode } from "../demo/demoMode";
 import { addDemoSafetyPlan, getDemoStore } from "../demo/demoStore";
+import { getDemoSafetyPlansForClient } from "../demo/demoServices";
 
 const COLLECTION_NAME = "safetyPlans";
 
@@ -22,6 +23,13 @@ export const safetyPlansService = {
     const snapshot = await getDocs(q);
     if (snapshot.empty) return null;
     return snapshot.docs[0].data() as SafetyPlan;
+  },
+
+  async getSafetyPlansForClient(clientId: string): Promise<SafetyPlan[]> {
+    if (isDemoMode()) return getDemoSafetyPlansForClient(clientId);
+    const q = query(collection(db, COLLECTION_NAME), where("clientId", "==", clientId), orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((docSnap) => docSnap.data() as SafetyPlan);
   },
 
   async createSafetyPlan(plan: SafetyPlan): Promise<void> {

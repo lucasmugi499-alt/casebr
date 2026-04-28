@@ -26,7 +26,7 @@ export const dashboardService = {
       { label: 'Notes completed this week', value: notesThisWeek.length },
     ];
 
-    return { metrics, assignedClients, highPriorityClients: highPriority, overdueTasks, notesThisWeek };
+    return { metrics, assignedClients, highPriorityClients: highPriority, overdueTasks, notesThisWeek, todayPriorityQueue: [] };
   },
 
   async getSupervisorDashboard(actor: ServiceActor) {
