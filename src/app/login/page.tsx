@@ -191,6 +191,17 @@ export default function LoginPage() {
               >
                 Enter as Manager
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-slate-300 text-slate-700 hover:bg-slate-100"
+                onClick={() => {
+                  localStorage.setItem("casebridge_demo_role", "admin");
+                  window.location.href = "/admin/users";
+                }}
+              >
+                Enter as Admin
+              </Button>
             </div>
             <div className="text-center mt-3 text-[10px] text-slate-400">
               Development-only demo access. Do not enable in production.
