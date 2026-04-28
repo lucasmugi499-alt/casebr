@@ -1,4 +1,21 @@
-import { AuditLog, CaseNote, Client, Organization, Referral, RiskFlag, SafetyPlan, Site, SupervisorReview, Task, UserProfile } from "@/types";
+import {
+  AuditLog,
+  CaseNote,
+  Client,
+  ClientNeed,
+  DocumentationChecklist,
+  DocumentChecklist,
+  GeneratedDocument,
+  Organization,
+  Referral,
+  RiskFlag,
+  SafetyPlan,
+  Site,
+  SupervisorReview,
+  Task,
+  UserProfile,
+  Workstream,
+} from "@/types";
 
 const now = new Date();
 const isoDaysAgo = (daysAgo: number, hour = 14) => {
@@ -107,6 +124,75 @@ export const demoSafetyPlans: SafetyPlan[] = [
 ];
 
 export const demoSupervisorReviews: SupervisorReview[] = Array.from({ length: 8 }, (_, i) => ({ id: `review_${i + 1}`, organizationId: demoOrganization.id, siteId: i % 2 === 0 ? "site_downtown" : "site_east", clientId: demoClients[i].id, caseNoteId: demoCaseNotes[i].id, riskFlagId: i < demoRiskFlags.length ? demoRiskFlags[i].id : undefined, supervisorId: i % 2 === 0 ? "demo_ssa" : "user_aisha", workerId: demoClients[i].assignedWorkerIds[0], reviewType: i % 3 === 0 ? "risk_flag" : i % 3 === 1 ? "case_note" : "general", comment: i % 2 === 0 ? "Please add follow-up detail and confirm referral contact date." : "Good documentation. Continue weekly follow-up cadence.", actionRequired: i % 2 === 0, actionDueDate: i % 2 === 0 ? isoDaysFromNow(2) : undefined, completedAt: i % 2 === 0 ? undefined : isoDaysAgo(1), createdAt: isoDaysAgo(7 - (i % 4)), updatedAt: isoDaysAgo(i % 3) }));
+
+export const demoWorkstreams: Workstream[] = [
+  { id: "ws_1001_housing", clientId: "client_1001", type: "housing", status: "waiting_on_agency", latestAction: "Housing application submitted to Metro Housing Access.", nextAction: "Follow up with housing worker.", dueDate: isoDaysFromNow(2), assignedWorkerId: "demo_caseworker", linkedNoteIds: ["note_1"], linkedTaskIds: ["task_1"], linkedReferralIds: ["referral_1"], priority: "high", updatedAt: isoDaysAgo(1) },
+  { id: "ws_1001_income", clientId: "client_1001", type: "income_benefits", status: "in_progress", latestAction: "Client supported with CRA account setup.", nextAction: "Obtain Notice of Assessment.", dueDate: isoDaysFromNow(4), assignedWorkerId: "demo_caseworker", linkedNoteIds: ["note_2"], linkedTaskIds: ["task_2"], linkedReferralIds: [], priority: "medium", updatedAt: isoDaysAgo(1) },
+  { id: "ws_1001_id", clientId: "client_1001", type: "identification_documents", status: "blocked", latestAction: "Client reported lost ID.", nextAction: "Complete birth certificate replacement form.", dueDate: isoDaysFromNow(5), assignedWorkerId: "demo_caseworker", linkedNoteIds: ["note_3"], linkedTaskIds: ["task_3"], linkedReferralIds: ["referral_3"], priority: "high", updatedAt: isoDaysAgo(2) },
+  { id: "ws_1002_housing", clientId: "client_1002", type: "housing", status: "in_progress", latestAction: "Referred to supportive housing navigator.", nextAction: "Confirm intake date with agency.", dueDate: isoDaysFromNow(1), assignedWorkerId: "demo_caseworker", linkedNoteIds: ["note_4"], linkedTaskIds: ["task_4"], linkedReferralIds: ["referral_4"], priority: "high", updatedAt: isoDaysAgo(1) },
+  { id: "ws_1002_safety", clientId: "client_1002", type: "safety", status: "in_progress", latestAction: "Safety planning session completed.", nextAction: "Review safety plan.", dueDate: isoDaysFromNow(2), assignedWorkerId: "demo_caseworker", linkedNoteIds: ["note_5"], linkedTaskIds: ["task_5"], linkedReferralIds: [], priority: "high", updatedAt: isoDaysAgo(1) },
+  { id: "ws_1004_housing", clientId: "client_1004", type: "housing", status: "waiting_on_client", latestAction: "Requested landlord references from client.", nextAction: "Collect references and upload copies.", dueDate: isoDaysFromNow(3), assignedWorkerId: "demo_caseworker", linkedNoteIds: ["note_6"], linkedTaskIds: ["task_6"], linkedReferralIds: ["referral_6"], priority: "medium", updatedAt: isoDaysAgo(2) },
+  { id: "ws_1008_housing", clientId: "client_1008", type: "housing", status: "paused", latestAction: "Client missed two appointments.", nextAction: "Re-engagement outreach call.", dueDate: isoDaysFromNow(0), assignedWorkerId: "demo_caseworker", linkedNoteIds: ["note_8"], linkedTaskIds: ["task_8"], linkedReferralIds: [], priority: "medium", updatedAt: isoDaysAgo(1) },
+  { id: "ws_1011_intake", clientId: "client_1011", type: "other", status: "not_started", latestAction: "Client assigned yesterday.", nextAction: "Begin intake and service planning.", dueDate: isoDaysFromNow(1), assignedWorkerId: "demo_caseworker", linkedNoteIds: [], linkedTaskIds: ["task_11"], linkedReferralIds: [], priority: "medium", updatedAt: isoDaysAgo(0) },
+  { id: "ws_1012_safety", clientId: "client_1012", type: "safety", status: "waiting_on_agency", latestAction: "Escalation support requested from clinical partner.", nextAction: "Confirm partner response and schedule check-in.", dueDate: isoDaysFromNow(1), assignedWorkerId: "demo_caseworker", linkedNoteIds: ["note_12"], linkedTaskIds: ["task_12"], linkedReferralIds: ["referral_12"], priority: "high", updatedAt: isoDaysAgo(0) },
+];
+
+export const demoClientNeeds: ClientNeed[] = [
+  { id: "need_1001_housing", clientId: "client_1001", needType: "housing_support", status: "in_progress", priority: "high", sourceOfNeed: "Initial intake assessment", dateIdentified: isoDaysAgo(12), identifiedBy: "demo_ssa", linkedWorkstreamId: "ws_1001_housing", recommendedNextAction: "Complete housing plan assessment and submit follow-up.", relatedDocumentTypes: ["housing_plan"], relatedTaskIds: ["task_1"], relatedReferralIds: ["referral_1"] },
+  { id: "need_1001_docs", clientId: "client_1001", needType: "identification_documents_support", status: "blocked", priority: "high", sourceOfNeed: "Case note follow-up", dateIdentified: isoDaysAgo(8), identifiedBy: "demo_caseworker", linkedWorkstreamId: "ws_1001_id", recommendedNextAction: "Review missing document checklist with client.", relatedDocumentTypes: ["document_checklist"], relatedTaskIds: ["task_3"], relatedReferralIds: ["referral_3"] },
+  { id: "need_1002_safety", clientId: "client_1002", needType: "safety_planning", status: "in_progress", priority: "high", sourceOfNeed: "Active risk flag", dateIdentified: isoDaysAgo(5), identifiedBy: "demo_caseworker", linkedWorkstreamId: "ws_1002_safety", recommendedNextAction: "Complete safety plan review by due date.", relatedDocumentTypes: ["safety_plan"], relatedTaskIds: ["task_5"], relatedReferralIds: [] },
+  { id: "need_1004_housing", clientId: "client_1004", needType: "housing_support", status: "waiting_on_client", priority: "medium", sourceOfNeed: "Housing support referral", dateIdentified: isoDaysAgo(9), identifiedBy: "user_sarah", linkedWorkstreamId: "ws_1004_housing", recommendedNextAction: "Collect required landlord references.", relatedDocumentTypes: ["housing_plan"], relatedTaskIds: ["task_6"], relatedReferralIds: ["referral_6"] },
+  { id: "need_1011_intake", clientId: "client_1011", needType: "income_benefits_support", status: "identified", priority: "medium", sourceOfNeed: "Intake pending", dateIdentified: isoDaysAgo(1), identifiedBy: "demo_ssa", linkedWorkstreamId: "ws_1011_intake", recommendedNextAction: "Start intake assessment and income screening.", relatedDocumentTypes: ["intake_assessment", "service_plan"], relatedTaskIds: ["task_11"], relatedReferralIds: [] },
+  { id: "need_1012_housing", clientId: "client_1012", needType: "housing_support", status: "waiting_on_agency", priority: "high", sourceOfNeed: "Crisis stabilization meeting", dateIdentified: isoDaysAgo(4), identifiedBy: "demo_caseworker", linkedWorkstreamId: "ws_1012_safety", recommendedNextAction: "Coordinate with clinical and housing supports.", relatedDocumentTypes: ["housing_plan", "safety_plan"], relatedTaskIds: ["task_12"], relatedReferralIds: ["referral_12"] },
+];
+
+export const demoDocumentationChecklists: DocumentationChecklist[] = demoClients.map((client, index) => ({
+  clientId: client.id,
+  intakeCompleted: index % 3 !== 0,
+  consentCompleted: index % 4 !== 0,
+  privacyExplained: true,
+  servicePlanStarted: index % 2 === 0,
+  housingPlanStarted: index % 3 === 0,
+  safetyScreeningCompleted: index % 5 !== 0,
+  idStatusDocumented: index % 3 !== 1,
+  incomeStatusDocumented: index % 4 !== 1,
+  emergencyContactDocumented: index % 5 !== 2,
+  referralsDocumented: index % 2 === 0,
+  dischargeTransitionPlanDocumented: client.status === "discharged",
+  updatedAt: isoDaysAgo(index % 6),
+}));
+
+export const demoDocumentChecklists: DocumentChecklist[] = demoClients.map((client, index) => ({
+  clientId: client.id,
+  governmentId: index % 2 === 0 ? "missing" : "complete",
+  healthCard: index % 3 === 0 ? "requested" : "complete",
+  sin: index % 4 === 0 ? "missing" : "complete",
+  proofOfIncome: index % 5 === 0 ? "requested" : "complete",
+  noticeOfAssessment: index % 2 === 0 ? "missing" : "requested",
+  housingDocuments: index % 3 === 0 ? "requested" : "complete",
+  medicalDocuments: "not_applicable",
+  legalDocuments: index % 6 === 0 ? "requested" : "not_applicable",
+  other: "not_applicable",
+  updatedAt: isoDaysAgo(index % 4),
+}));
+
+export const demoGeneratedDocuments: GeneratedDocument[] = [
+  {
+    id: "doc_housing_1002",
+    clientId: "client_1002",
+    organizationId: demoOrganization.id,
+    siteId: "site_downtown",
+    type: "housing_plan",
+    title: "Housing Plan - Maria L.",
+    status: "review_due",
+    generatedText: "HOUSING PLAN\n\nClient: Maria L.\nClient Code: CB-1002\nDate Completed: Not documented.\nCompleted By: Demo Caseworker\nShelter/Site: Downtown Shelter\n\nCurrent Housing Goal:\nSecure supportive housing placement with agency support.\n\nCurrent Housing Situation:\nCurrently staying in shelter; stabilization supports in progress.\n\nIncome and Affordability:\nIncome information is partially documented and follow-up is required.\n\nIdentification and Required Documents:\nSome documents are pending replacement.\n\nHousing Applications / Referrals:\nSupportive housing referral submitted and pending response.\n\nBarriers to Housing:\nIncome interruption and documentation delays.\n\nStrengths and Supports:\nClient is engaged and willing to work with staff.\n\nAction Plan:\n- Action: Follow up with housing agency.\n- Responsible Person: Caseworker\n- Due Date: Not documented.\n- Follow-Up Date: Not documented.\n\nClient Agreement / Participation:\nClient participated in planning discussion.\n\nNext Review Date:\nNot documented.\n\nWorker Summary:\nHousing supports are active and follow-up is required to reduce delays.",
+    sourceAnswers: { draft: true },
+    createdById: "demo_caseworker",
+    createdAt: isoDaysAgo(5),
+    updatedAt: isoDaysAgo(2),
+    reviewDate: isoDaysFromNow(3),
+  },
+];
 
 export const demoAuditLogs: AuditLog[] = Array.from({ length: 15 }, (_, i) => ({ id: `audit_${i + 1}`, organizationId: demoOrganization.id, siteId: i % 2 === 0 ? "site_downtown" : "site_east", userId: ["demo_caseworker", "demo_ssa", "demo_manager", "demo_admin"][i % 4], action: ["create_case_note", "create_task", "create_referral", "review_risk_flag", "update_client"][i % 5], entityType: ["caseNote", "task", "referral", "riskFlag", "client"][i % 5], entityId: [demoCaseNotes[0].id, demoTasks[0].id, demoReferrals[0].id, demoRiskFlags[0].id, demoClients[0].id][i % 5], timestamp: isoDaysAgo(i % 9, 9 + (i % 8)), metadata: { source: "demo", index: i + 1 } }));
 
