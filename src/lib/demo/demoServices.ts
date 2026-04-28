@@ -71,13 +71,18 @@ export const getDemoCaseworkerDashboard = (actor: ServiceActor) => {
   const pendingReferrals = store.referrals.filter((referral) => assignedIds.has(referral.clientId) && ["pending", "no_response"].includes(referral.status));
 
   const documentationGaps = store.documentationChecklists.filter(
-    (check) => clients.some((client) => client.id === check.clientId) && (!check.intakeCompleted || !check.servicePlanStarted || !check.housingPlanStarted)
+    (check) => clients.some((client) => client.id === check.clientId) && 
+    (!check.intakeCompleted || !check.servicePlanCompleted || !check.housingPlanStarted || !check.safetyPlanCompleted)
   ).length;
+
   const housingActionsPending = store.workstreams.filter(
     (ws) => clients.some((client) => client.id === ws.clientId) && ws.type === "housing" && ["in_progress", "waiting_on_agency", "waiting_on_client", "blocked"].includes(ws.status)
   ).length;
-  const safetyReviewsDue = store.safetyPlans.filter(
-    (plan) => clients.some((client) => client.id === plan.clientId) && new Date(plan.reviewDate).getTime() <= Date.now() + 24 * 60 * 60 * 1000
+
+  const safetyReviewsDue = store.generatedDocuments.filter(
+    (doc) => doc.type === "safety_plan" && 
+    clients.some((client) => client.id === doc.clientId) && 
+    (doc.status === "review_due" || (doc.reviewDate && new Date(doc.reviewDate).getTime() <= Date.now()))
   ).length;
 
   type QueueItem = {
@@ -174,6 +179,7 @@ export const getDemoTimelineForClient = (clientId: string): TimelineItem[] => {
   const store = getDemoStore();
   const notes = getDemoNotesForClient(clientId).map((note) => ({
     id: `note-${note.id}`,
+    clientId,
     type: "case_note" as const,
     date: note.contactDate,
     title: "Case note",
@@ -184,6 +190,7 @@ export const getDemoTimelineForClient = (clientId: string): TimelineItem[] => {
   }));
   const tasks = getDemoTasksForClient(clientId).map((task) => ({
     id: `task-${task.id}`,
+    clientId,
     type: "task" as const,
     date: task.updatedAt,
     title: task.title,
@@ -195,18 +202,44 @@ export const getDemoTimelineForClient = (clientId: string): TimelineItem[] => {
   }));
   const referrals = getDemoReferralsForClient(clientId).map((referral) => ({
     id: `ref-${referral.id}`,
+    clientId,
     type: "referral" as const,
     date: referral.referralDate,
-    title: `${referral.referralType} referral`,
+    title: `${referral.referralType.replace("_", " ")} referral`,
     summary: `${referral.agencyName} • ${referral.status}`,
     staffId: referral.createdById,
     entityId: referral.id,
     entityType: "referral",
     status: referral.status,
   }));
+  const riskFlags = getDemoRiskFlagsForClient(clientId).map((flag) => ({
+    id: `risk-${flag.id}`,
+    clientId,
+    type: "risk_flag" as const,
+    date: flag.createdAt,
+    title: `Risk Flag: ${flag.category}`,
+    summary: flag.description,
+    staffId: flag.createdById,
+    entityId: flag.id,
+    entityType: "riskFlag",
+    status: flag.active ? "active" : "resolved",
+  }));
+  const safetyPlans = getDemoSafetyPlansForClient(clientId).map((plan) => ({
+    id: `safety-${plan.id}`,
+    clientId,
+    type: "safety_plan" as const,
+    date: plan.updatedAt,
+    title: "Safety Plan Updated",
+    summary: plan.concernSummary,
+    staffId: plan.createdById,
+    entityId: plan.id,
+    entityType: "safetyPlan",
+    status: plan.status,
+  }));
   const docs = getDemoGeneratedDocumentsForClient(clientId).map((doc) => ({
     id: `doc-${doc.id}`,
-    type: doc.type === "housing_plan" ? ("housing_plan" as const) : ("service_plan" as const),
+    clientId,
+    type: "generated_document" as const,
     date: doc.updatedAt,
     title: doc.title,
     summary: `Document status: ${doc.status}`,
@@ -215,8 +248,162 @@ export const getDemoTimelineForClient = (clientId: string): TimelineItem[] => {
     entityType: "generatedDocument",
     status: doc.status,
   }));
-  const manualTimeline = store.timelineItems.filter((item) => item.entityId.startsWith(clientId));
-  return [...notes, ...tasks, ...referrals, ...docs, ...manualTimeline].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const reviews = getDemoSupervisorReviewsForClient(clientId).map((review) => ({
+    id: `review-${review.id}`,
+    clientId,
+    type: "supervisor_review" as const,
+    date: review.createdAt,
+    title: "Supervisor Review",
+    summary: review.comment,
+    staffId: review.supervisorId,
+    entityId: review.id,
+    entityType: "supervisorReview",
+  }));
+  
+  const manualTimeline = store.timelineItems.filter((item) => item.clientId === clientId);
+  
+  return [...notes, ...tasks, ...referrals, ...riskFlags, ...safetyPlans, ...docs, ...reviews, ...manualTimeline]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+};
+
+export const getSupervisorOperationalBoard = (actor: ServiceActor) => {
+  const store = getDemoStore();
+  const clients = getDemoClientsForUser(actor);
+  const caseworkers = demoUsers.filter((user) => user.role === "caseworker" && (actor.role === "admin" || actor.role === "manager" || actor.siteIds.some(s => user.siteIds.includes(s))));
+  
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  // 1. UNASSIGNED CLIENTS
+  const unassignedClients = store.clients.filter(c => 
+    (c.assignedWorkerIds.length === 0 || c.status === "intake") && 
+    canViewClient(c, actor)
+  );
+
+  // 2. CLIENT ATTENTION QUEUE
+  const attentionQueue = clients.map(client => {
+    const reasons: string[] = [];
+    const clientTasks = store.tasks.filter(t => t.clientId === client.id && t.status !== "completed");
+    const clientNotes = store.caseNotes.filter(n => n.clientId === client.id);
+    const clientRisk = store.riskFlags.filter(r => r.clientId === client.id && r.active);
+    const clientDocs = store.generatedDocuments.filter(d => d.clientId === client.id);
+    const checklist = store.documentationChecklists.find(ch => ch.clientId === client.id);
+
+    if (clientTasks.some(t => t.dueDate < new Date().toISOString())) reasons.push("Overdue follow-up");
+    if (!client.lastContactAt || new Date(client.lastContactAt) < sevenDaysAgo) reasons.push("No contact in 7+ days");
+    if (clientRisk.some(r => r.severity === "high")) reasons.push("Active high-risk flag");
+    if (clientDocs.some(d => d.type === "safety_plan" && d.status === "review_due")) reasons.push("Safety plan review due");
+    if (!checklist?.housingPlanStarted) reasons.push("Housing plan missing");
+    if (!checklist?.servicePlanStarted) reasons.push("Service plan missing");
+    if (client.status === "intake" && !checklist?.intakeCompleted) reasons.push("Intake incomplete");
+
+    return {
+      client,
+      assignedWorkers: caseworkers.filter(w => client.assignedWorkerIds.includes(w.id)),
+      reasons,
+      lastContactAt: client.lastContactAt,
+      priority: client.priority,
+      riskLevel: clientRisk.length > 0 ? "high" : "normal",
+      gapCount: reasons.filter(r => r.includes("missing") || r.includes("incomplete")).length
+    };
+  }).filter(item => item.reasons.length > 0);
+
+  // 3. STAFF WORKLOAD
+  const staffWorkload = caseworkers.map(worker => {
+    const workerClients = store.clients.filter(c => c.assignedWorkerIds.includes(worker.id));
+    const workerTasks = store.tasks.filter(t => t.assignedToId === worker.id && t.status !== "completed");
+    const workerNotes = store.caseNotes.filter(n => n.authorId === worker.id && new Date(n.createdAt) >= sevenDaysAgo);
+    
+    const overdueCount = workerTasks.filter(t => t.dueDate < new Date().toISOString()).length;
+    const highPriorityCount = workerClients.filter(c => c.priority === "high").length;
+
+    let workloadStatus: 'balanced' | 'high' | 'overloaded' | 'support_needed' | 'low_activity' = 'balanced';
+    if (workerClients.length > 8) workloadStatus = 'overloaded';
+    else if (workerClients.length > 5 || overdueCount > 3) workloadStatus = 'high';
+    else if (workerNotes.length === 0 && workerClients.length > 0) workloadStatus = 'low_activity';
+
+    return {
+      worker,
+      clientCount: workerClients.length,
+      highPriorityCount,
+      overdueCount,
+      notesThisWeek: workerNotes.length,
+      pendingReferrals: store.referrals.filter(r => workerClients.some(c => c.id === r.clientId) && r.status === "pending").length,
+      workloadStatus,
+      lastActivity: workerNotes[0]?.createdAt || worker.updatedAt
+    };
+  });
+
+  // 4. RISK & SAFETY QUEUE
+  const riskQueue = store.riskFlags.filter(r => 
+    r.active && r.supervisorReviewRequired && 
+    clients.some(c => c.id === r.clientId)
+  ).map(risk => ({
+    risk,
+    client: clients.find(c => c.id === risk.clientId),
+    worker: caseworkers.find(w => w.id === risk.createdById)
+  }));
+
+  const safetyReviews = store.generatedDocuments.filter(d => 
+    d.type === "safety_plan" && d.status === "review_due" &&
+    clients.some(c => c.id === d.clientId)
+  ).map(doc => ({
+    doc,
+    client: clients.find(c => c.id === doc.clientId),
+    worker: caseworkers.find(w => w.id === doc.createdById)
+  }));
+
+  // 5. DOCUMENTATION GAPS
+  const documentationGaps = clients.map(client => {
+    const checklist = store.documentationChecklists.find(ch => ch.clientId === client.id);
+    const gaps: string[] = [];
+    if (!checklist?.intakeCompleted) gaps.push("Intake Assessment");
+    if (!checklist?.servicePlanStarted) gaps.push("Service Plan");
+    if (!checklist?.housingPlanStarted) gaps.push("Housing Plan");
+    
+    return {
+      client,
+      assignedWorkers: caseworkers.filter(w => client.assignedWorkerIds.includes(w.id)),
+      gaps,
+      status: client.status
+    };
+  }).filter(item => item.gaps.length > 0);
+
+  // 6. RECENT TEAM ACTIVITY
+  const recentActivity = store.auditLogs.slice(0, 20).map(log => ({
+    ...log,
+    user: demoUsers.find(u => u.id === log.userId),
+    client: store.clients.find(c => c.id === log.entityId)
+  }));
+
+  return {
+    summary: {
+      unassignedCount: unassignedClients.length,
+      activeClients: clients.filter(c => c.status === "active").length,
+      activeCaseworkers: caseworkers.length,
+      overdueTasks: store.tasks.filter(t => t.status !== "completed" && t.dueDate < new Date().toISOString()).length,
+      riskReviewsRequired: riskQueue.length + safetyReviews.length,
+      documentationGaps: documentationGaps.length,
+      noContact7Days: attentionQueue.filter(a => a.reasons.includes("No contact in 7+ days")).length,
+    },
+    unassignedClients,
+    attentionQueue,
+    staffWorkload,
+    riskQueue,
+    safetyReviews,
+    documentationGaps,
+    recentActivity,
+    caseworkers
+  };
+};
+
+export const getDemoAuditLogs = (actor: ServiceActor): AuditLog[] => {
+  const siteFilter = actor.role === "admin" || actor.role === "manager" ? null : new Set(actor.siteIds);
+  const store = getDemoStore();
+  return [...store.auditLogs]
+    .filter((log) => !siteFilter || (log.siteId ? siteFilter.has(log.siteId) : true))
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 };
 
 export const getDemoSupervisorDashboard = (actor: ServiceActor) => {
@@ -251,11 +438,4 @@ export const getDemoManagementDashboard = (_actor: ServiceActor) => {
     activeRiskFlags: store.riskFlags.filter((risk) => risk.active).length,
     safetyPlansDue: store.safetyPlans.filter((plan) => plan.status === "review_due").length,
   };
-};
-
-export const getDemoAuditLogs = (actor: ServiceActor): AuditLog[] => {
-  const siteFilter = actor.role === "admin" || actor.role === "manager" ? null : new Set(actor.siteIds);
-  return [...getBaseAuditLogs()]
-    .filter((log) => !siteFilter || (log.siteId ? siteFilter.has(log.siteId) : true))
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 };

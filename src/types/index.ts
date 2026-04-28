@@ -82,7 +82,11 @@ export type ContactType =
   | 'crisis_support'
   | 'informal_check_in'
   | 'referral_support'
-  | 'housing_support';
+  | 'housing_support'
+  | 'intake_follow_up'
+  | 'plan_review'
+  | 'document_support'
+  | 'other';
 
 export type NoteCategory =
   | 'general_check_in'
@@ -98,7 +102,11 @@ export type NoteCategory =
   | 'family_supports'
   | 'behavioural_incident_follow_up'
   | 'discharge_planning'
-  | 'system_navigation';
+  | 'system_navigation'
+  | 'referral_follow_up'
+  | 'service_plan_update'
+  | 'document_checklist_update'
+  | 'intake_assessment';
 
 export interface CaseNote {
   id: string;
@@ -211,7 +219,7 @@ export interface SupervisorReview {
   riskFlagId?: string;
   supervisorId: string;
   workerId?: string;
-  reviewType: 'case_note' | 'risk_flag' | 'safety_plan' | 'general';
+  reviewType: 'case_note_review' | 'risk_review' | 'safety_plan_review' | 'documentation_gap' | 'workload_support' | 'client_progress' | 'assignment_note' | 'general_supervision';
   comment: string;
   actionRequired: boolean;
   actionDueDate?: string;
@@ -234,19 +242,18 @@ export interface AuditLog {
 
 export interface TimelineItem {
   id: string;
+  clientId: string;
   type:
     | 'case_note'
     | 'task'
     | 'referral'
     | 'risk_flag'
     | 'safety_plan'
+    | 'generated_document'
+    | 'assignment'
     | 'supervisor_review'
-    | 'workstream_update'
-    | 'housing_plan'
-    | 'service_plan'
-    | 'document_checklist'
     | 'status_change'
-    | 'supervisor_review';
+    | 'workstream_update';
   date: string;
   title: string;
   summary: string;
@@ -254,7 +261,7 @@ export interface TimelineItem {
   staffName?: string;
   entityId: string;
   entityType: string;
-  relatedWorkstream?: WorkstreamType;
+  workstreamType?: WorkstreamType;
   status?: string;
 }
 
@@ -390,8 +397,10 @@ export interface DocumentationChecklist {
   consentCompleted: boolean;
   privacyExplained: boolean;
   servicePlanStarted: boolean;
+  servicePlanCompleted: boolean;
   housingPlanStarted: boolean;
   safetyScreeningCompleted: boolean;
+  safetyPlanCompleted: boolean;
   idStatusDocumented: boolean;
   incomeStatusDocumented: boolean;
   emergencyContactDocumented: boolean;

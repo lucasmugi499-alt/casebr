@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import { dashboardService } from "@/lib/services/dashboardService";
 import { CaseNote, Client, Task } from "@/types";
-import { AlertCircle, CalendarClock, FileText, Plus, ShieldAlert, Users } from "lucide-react";
+import { AlertCircle, CalendarClock, FileText, Plus, ShieldAlert, Users, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -178,18 +178,36 @@ export default function CaseworkerDashboard() {
 
             <div className="grid gap-4 lg:grid-cols-2">
               <Card>
-                <CardHeader><CardTitle>Recent Documentation</CardTitle></CardHeader>
-                <CardContent className="space-y-3">
+                <CardHeader>
+                  <CardTitle className="text-base font-bold">Recent Documentation</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   {data.notesThisWeek.slice(0, 6).map((note) => (
-                    <div key={note.id} className="rounded border p-3">
-                      <p className="text-xs text-muted-foreground">{new Date(note.contactDate).toLocaleDateString()} • {note.category} • {note.contactType}</p>
-                      <p className="text-sm line-clamp-2">{note.finalNote}</p>
-                      <div className="mt-2 flex items-center gap-2">
-                        {note.aiGenerated && <Badge variant="secondary">AI-assisted</Badge>}
-                        <Link href={`/clients/${note.clientId}`} className={buttonVariants({ size: "sm", variant: "outline" })}>Open client</Link>
+                    <div key={note.id} className="rounded-lg border bg-muted/5 p-3 hover:bg-muted/10 transition-colors">
+                      <div className="flex items-center justify-between mb-1">
+                        <Badge variant="outline" className="text-[9px] uppercase font-bold py-0 h-4">
+                          {note.category.replace("_", " ")}
+                        </Badge>
+                        <span className="text-[10px] text-muted-foreground font-medium">
+                          {new Date(note.contactDate).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-xs font-mono line-clamp-2 leading-relaxed text-foreground/80 mb-2">
+                        {note.finalNote}
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          {note.aiGenerated && <Sparkles className="h-3 w-3 text-primary" />}
+                        </div>
+                        <Link href={`/clients/${note.clientId}?tab=notes`} className={buttonVariants({ size: "sm", variant: "ghost", className: "h-7 text-[10px] font-bold uppercase" })}>
+                          Open File
+                        </Link>
                       </div>
                     </div>
                   ))}
+                  {data.notesThisWeek.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic text-center py-4">No recent notes documented.</p>
+                  )}
                 </CardContent>
               </Card>
 

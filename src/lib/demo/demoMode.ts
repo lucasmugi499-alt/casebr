@@ -18,6 +18,12 @@ export const getDemoUserProfile = (): UserProfile | null => {
   return demoUsers.find((user) => user.role === role && user.id.startsWith("demo_")) ?? null;
 };
 
+export const enterDemoMode = (role: UserProfile["role"]) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(ROLE_KEY, role);
+  window.location.reload();
+};
+
 export const exitDemoMode = () => {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(ROLE_KEY);

@@ -35,12 +35,14 @@ export function Sidebar() {
   ];
 
   const adminNav = [
-    { name: "Admin Users", href: "/admin/users", icon: Users },
+    { name: "Users", href: "/admin/users", icon: Users },
     { name: "Sites", href: "/admin/sites", icon: Building },
-    { name: "Audit Logs", href: "/admin/audit-logs", icon: FileText },
+    { name: "Templates", href: "/admin/templates", icon: LayoutDashboard },
+    { name: "Settings", href: "/admin/settings", icon: Settings },
+    { name: "Audit Trail", href: "/admin/audit-logs", icon: FileText },
     { name: "Management", href: "/management", icon: BarChart3 },
     { name: "Reports", href: "/reports", icon: FileText },
-    { name: "Settings", href: "/settings", icon: Settings },
+    { name: "Demo Tools", href: "/admin/demo-tools", icon: RotateCcw },
   ];
 
   let navigation = caseworkerNav;

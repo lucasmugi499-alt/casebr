@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "firebase/auth";
 import { auth, db, isMock } from "@/lib/firebase/client";
 import { useRouter } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
 import { User } from "@/types";
+import { useAuth } from "@/contexts/AuthContext";
 import { getHomeRouteForRole } from "@/lib/auth/roleRouting";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,12 +14,20 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { ShieldAlert } from "lucide-react";
+import { enterDemoMode } from "@/lib/demo/demoMode";
 
 export default function LoginPage() {
+  const { user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.push(getHomeRouteForRole(user.role));
+    }
+  }, [user, authLoading, router]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,9 +118,9 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={handleResetPassword}
-                  className="text-xs text-indigo-600 hover:underline"
+                  className="text-xs text-muted-foreground hover:text-primary"
                 >
-                  Forgot password?
+                  Forgot your password?
                 </button>
               </div>
               <Input
@@ -124,90 +133,32 @@ export default function LoginPage() {
               />
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700" disabled={loading}>
-              {loading ? "Please wait..." : "Log In"}
+          <CardFooter className="flex flex-col space-y-4 pb-8">
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Authenticating..." : "Sign In"}
             </Button>
-            {isMock && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                onClick={() => {
-                  setLoading(true);
-                  setTimeout(() => {
-                    router.push(getHomeRouteForRole("admin"));
-                    setLoading(false);
-                    toast.success("Logged in as Demo Admin (Mock Mode)");
-                  }, 800);
-                }}
-                disabled={loading}
-              >
-                Bypass Login (Mock Mode)
-              </Button>
+
+            {process.env.NODE_ENV === "development" && (
+              <div className="w-full pt-6 border-t space-y-3">
+                <p className="text-[10px] text-center uppercase font-bold tracking-widest text-muted-foreground">Demo Access</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="outline" size="sm" className="text-[11px] h-8" onClick={() => enterDemoMode("caseworker")}>
+                    Caseworker
+                  </Button>
+                  <Button variant="outline" size="sm" className="text-[11px] h-8" onClick={() => enterDemoMode("ssa")}>
+                    SSA / Supervisor
+                  </Button>
+                  <Button variant="outline" size="sm" className="text-[11px] h-8" onClick={() => enterDemoMode("manager")}>
+                    Manager
+                  </Button>
+                  <Button variant="outline" size="sm" className="text-[11px] h-8" onClick={() => enterDemoMode("admin")}>
+                    Admin Console
+                  </Button>
+                </div>
+              </div>
             )}
           </CardFooter>
         </form>
-
-        {process.env.NODE_ENV === "development" && (
-          <div className="border-t border-slate-200 mt-2 px-6 py-6 bg-slate-50 rounded-b-xl">
-            <div className="text-center mb-4">
-              <h3 className="text-sm font-semibold text-slate-900">Demo Access</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Use these temporary demo buttons to preview role-specific dashboards while staff account setup is being completed.
-              </p>
-            </div>
-            <div className="space-y-2 flex flex-col">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full border-slate-300 text-slate-700 hover:bg-slate-100"
-                onClick={() => {
-                  localStorage.setItem("casebridge_demo_role", "caseworker");
-                  window.location.href = "/dashboard";
-                }}
-              >
-                Enter as Caseworker
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full border-slate-300 text-slate-700 hover:bg-slate-100"
-                onClick={() => {
-                  localStorage.setItem("casebridge_demo_role", "ssa");
-                  window.location.href = "/team";
-                }}
-              >
-                Enter as SSA / Supervisor
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full border-slate-300 text-slate-700 hover:bg-slate-100"
-                onClick={() => {
-                  localStorage.setItem("casebridge_demo_role", "manager");
-                  window.location.href = "/management";
-                }}
-              >
-                Enter as Manager
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full border-slate-300 text-slate-700 hover:bg-slate-100"
-                onClick={() => {
-                  localStorage.setItem("casebridge_demo_role", "admin");
-                  window.location.href = "/admin/users";
-                }}
-              >
-                Enter as Admin
-              </Button>
-            </div>
-            <div className="text-center mt-3 text-[10px] text-slate-400">
-              Development-only demo access. Do not enable in production.
-            </div>
-          </div>
-        )}
       </Card>
     </div>
   );
