@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 export default function SafetyPlanReviewPage() {
   const { id, planId } = useParams<{ id: string; planId: string }>();

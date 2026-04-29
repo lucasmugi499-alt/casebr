@@ -33,37 +33,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   const loadProfile = useCallback(async (fUser: FirebaseUser | null) => {
+    if (isDemoMode()) {
+      setUser(getDemoUserProfile());
+      return;
+    }
+
     if (!fUser) {
-      if (isDemoMode()) {
-        const demoUser = getDemoUserProfile();
-        if (demoUser) {
-          setUser(demoUser);
-          return;
-        }
+      setUser(null);
+      return;
+    }
+
+    try {
+      const userDoc = await getDoc(doc(db, "users", fUser.uid));
+      if (!userDoc.exists()) {
+        console.warn("Auth success but no Firestore profile found. Signing out.");
+        await firebaseSignOut(auth);
+        setUser(null);
+        return;
       }
-      setUser(null);
-      return;
-    }
 
-    const userDoc = await getDoc(doc(db, "users", fUser.uid));
-    if (!userDoc.exists()) {
-      console.warn("Auth success but no Firestore profile found. Signing out.");
-      await firebaseSignOut(auth);
-      setUser(null);
-      return;
-    }
+      const profile = userDoc.data() as User;
+      if (profile.status !== "active") {
+        await firebaseSignOut(auth);
+        setUser(null);
+        return;
+      }
 
-    const profile = userDoc.data() as User;
-    if (profile.status !== "active") {
-      await firebaseSignOut(auth);
+      setUser(profile);
+    } catch (err) {
+      console.error("Error loading profile:", err);
       setUser(null);
-      return;
     }
-
-    setUser(profile);
   }, []);
 
   useEffect(() => {
+    if (isDemoMode()) {
+      const demoUser = getDemoUserProfile();
+      setUser(demoUser);
+      setFirebaseUser(null);
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (fUser) => {
       setLoading(true);
       setFirebaseUser(fUser);

@@ -432,16 +432,84 @@ export const getDemoSupervisorDashboard = (actor: ServiceActor) => {
 
 export const getDemoManagementDashboard = (_actor: ServiceActor) => {
   const store = getDemoStore();
-  const activeClients = store.clients.filter((client) => ["active", "follow_up_needed", "intake"].includes(client.status));
+  const clients = store.clients;
+  const activeClients = clients.filter((c) => ["active", "follow_up_needed", "intake"].includes(c.status));
+  const tasks = store.tasks;
+  const notes = store.caseNotes;
+  const referrals = store.referrals;
+  const risks = store.riskFlags;
+  const safetyPlans = store.safetyPlans;
+  const checklists = store.documentationChecklists;
+  const workers = demoUsers.filter(u => u.role === "caseworker");
+
+  const mtd = new Date();
+  mtd.setDate(1); // Start of month
+  const mtdStr = mtd.toISOString();
+
+  const metrics = [
+    { label: "Active clients", value: activeClients.length },
+    { label: "New intakes", value: clients.filter(c => c.status === "intake").length },
+    { label: "Clients housed (MTD)", value: clients.filter(c => c.status === "housed" && c.updatedAt >= mtdStr).length },
+    { label: "Discharged clients", value: clients.filter(c => c.status === "discharged").length },
+    { label: "Notes completed", value: notes.length },
+    { label: "Referrals made", value: referrals.length },
+    { label: "Follow-ups overdue", value: tasks.filter(t => t.dueDate < new Date().toISOString() && t.status !== "completed").length },
+    { label: "Active risk flags", value: risks.filter(r => r.active).length },
+    { label: "Safety reviews due", value: safetyPlans.filter(p => p.status === "review_due").length },
+    { 
+      label: "Documentation gaps", 
+      value: checklists.filter(c => !c.intakeCompleted || !c.servicePlanCompleted || !c.housingPlanCompleted).length 
+    },
+    { label: "Average caseload", value: Math.round(activeClients.length / (workers.length || 1)) }
+  ];
+
   return {
-    totalActiveClients: activeClients.length,
-    housedClients: store.clients.filter((client) => client.status === "housed").length,
-    dischargedClients: store.clients.filter((client) => client.status === "discharged").length,
-    notesCompleted: store.caseNotes.length,
-    referralsMade: store.referrals.length,
-    followUpsOverdue: store.tasks.filter((task) => task.dueDate < new Date().toISOString() && task.status !== "completed").length,
-    activeRiskFlags: store.riskFlags.filter((risk) => risk.active).length,
-    safetyPlansDue: store.safetyPlans.filter((plan) => plan.status === "review_due").length,
+    metrics,
+    programSnapshot: {
+      totalClients: clients.length,
+      activeClients: activeClients.length,
+      housedMTD: clients.filter(c => c.status === "housed" && c.updatedAt >= mtdStr).length,
+    },
+    clientNeedsBreakdown: store.clientNeeds.reduce((acc: any, need) => {
+      acc[need.needType] = (acc[need.needType] || 0) + 1;
+      return acc;
+    }, {}),
+    workstreamStatusBreakdown: store.workstreams.reduce((acc: any, ws) => {
+      acc[ws.status] = (acc[ws.status] || 0) + 1;
+      return acc;
+    }, {}),
+    documentationCompletion: {
+      intake: Math.round((checklists.filter(c => c.intakeCompleted).length / (checklists.length || 1)) * 100),
+      housing: Math.round((checklists.filter(c => c.housingPlanCompleted).length / (checklists.length || 1)) * 100),
+      service: Math.round((checklists.filter(c => c.servicePlanCompleted).length / (checklists.length || 1)) * 100),
+    },
+    housingOutcomes: {
+      housed: clients.filter(c => c.status === "housed").length,
+      transferred: clients.filter(c => c.status === "transferred").length,
+      discharged: clients.filter(c => c.status === "discharged").length,
+    },
+    referralOutcomes: referrals.reduce((acc: any, ref) => {
+      acc[ref.status] = (acc[ref.status] || 0) + 1;
+      return acc;
+    }, {}),
+    staffWorkload: workers.map(w => ({
+      name: `${w.firstName} ${w.lastName}`,
+      caseload: clients.filter(c => c.assignedWorkerIds.includes(w.id)).length,
+      overdueTasks: tasks.filter(t => t.assignedToId === w.id && t.status !== "completed" && t.dueDate < new Date().toISOString()).length
+    })),
+    riskSafetyOversight: {
+      activeRisks: risks.filter(r => r.active).length,
+      pendingSafetyReviews: safetyPlans.filter(p => p.status === "review_due").length,
+    },
+    siteComparison: store.sites.map(s => ({
+      name: s.name,
+      activeClients: clients.filter(c => c.siteId === s.id && ["active", "intake"].includes(c.status)).length,
+      housedMTD: clients.filter(c => c.siteId === s.id && c.status === "housed" && c.updatedAt >= mtdStr).length
+    })),
+    managementInsights: [
+      { type: "warning", message: `${tasks.filter(t => t.status !== "completed" && t.dueDate < new Date().toISOString()).length} follow-up tasks are currently overdue.` },
+      { type: "info", message: `${clients.filter(c => c.status === "intake").length} clients currently in intake process.` }
+    ]
   };
 };
 

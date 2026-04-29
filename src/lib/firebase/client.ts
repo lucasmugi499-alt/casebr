@@ -12,40 +12,24 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-if (!firebaseConfig.projectId) {
-  console.error("Missing Firebase configuration in .env.local. Please check your setup.");
-}
+const hasConfig = !!firebaseConfig.projectId;
+const app = hasConfig ? (getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)) : null;
 
-// Initialize Firebase only if there are no apps already initialized
-const isMock = !firebaseConfig.projectId || (typeof window !== "undefined" && localStorage.getItem("casebridge_demo_role") !== null);
-const app = isMock ? null : (getApps().length > 0 ? getApp() : initializeApp(firebaseConfig));
-
-type MockAuth = ReturnType<typeof getAuth>;
-type MockDb = ReturnType<typeof getFirestore>;
-
+// Mock implementations for when configuration is missing entirely
 const mockAuth = {
   currentUser: null,
   onAuthStateChanged: (callback: (user: unknown) => void) => {
     setTimeout(() => callback(null), 0);
     return () => {};
   },
-  signOut: async () => {
-    console.log("Mock sign out");
-  }
-} as unknown as MockAuth;
+  signOut: async () => {}
+} as any;
 
 const mockDb = {
-  collection: () => ({
-    doc: () => ({
-      get: async () => ({
-        exists: () => false,
-        data: () => null,
-      })
-    })
-  })
-} as unknown as MockDb;
+  collection: () => ({ doc: () => ({ get: async () => ({ exists: () => false, data: () => null }) }) })
+} as any;
 
-export const auth = isMock ? mockAuth : getAuth(app!);
-export const db = isMock ? mockDb : getFirestore(app!);
-
-export { isMock };
+export const auth = app ? getAuth(app) : mockAuth;
+export const db = app ? getFirestore(app) : mockDb;
+export const isConfigured = hasConfig;
+export const isMock = !hasConfig;

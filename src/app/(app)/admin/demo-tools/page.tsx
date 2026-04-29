@@ -5,6 +5,7 @@ import AuthGuard from "@/components/AuthGuard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { 
   Wrench, 
   Database, 
@@ -15,7 +16,8 @@ import {
   History, 
   AlertTriangle,
   Zap,
-  Code
+  Code,
+  ShieldCheck
 } from "lucide-react";
 import { getDemoStore } from "@/lib/demo/demoStore";
 import { exitDemoMode } from "@/lib/demo/demoMode";
@@ -156,6 +158,3 @@ function StatItem({ label, value, icon, colSpan = 1 }: { label: string, value: n
     </div>
   );
 }
-
-import { cn } from "@/lib/utils";
-import { ShieldCheck } from "lucide-react";

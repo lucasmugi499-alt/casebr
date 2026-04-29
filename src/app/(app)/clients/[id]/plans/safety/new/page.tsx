@@ -69,7 +69,9 @@ export default function NewSafetyPlanPage() {
       id: user.id, 
       organizationId: user.organizationId, 
       role: user.role, 
-      siteIds: user.siteIds 
+      siteIds: user.siteIds,
+      firstName: user.firstName,
+      lastName: user.lastName,
     }).then(setClient);
   }, [id, user]);
 

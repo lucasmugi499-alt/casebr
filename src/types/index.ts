@@ -55,6 +55,8 @@ export interface Client {
   organizationId: string;
   siteId: string;
   displayName: string;
+  firstName?: string;
+  lastName?: string;
   legalName?: string;
   clientCode: string;
   dateOfBirth?: string;
@@ -153,6 +155,7 @@ export interface Task {
 }
 
 export type ReferralStatus = 'pending' | 'completed' | 'declined' | 'no_response' | 'cancelled';
+export type ReferralType = 'housing' | 'income' | 'medical' | 'mental_health' | 'legal' | 'employment' | 'substance_use' | 'food_bank' | 'other';
 
 export interface Referral {
   id: string;
@@ -160,7 +163,7 @@ export interface Referral {
   siteId: string;
   clientId: string;
   createdById: string;
-  referralType: string;
+  referralType: ReferralType;
   agencyName: string;
   contactPerson?: string;
   contactInfo?: string;
@@ -220,7 +223,10 @@ export interface SupervisorReview {
   riskFlagId?: string;
   supervisorId: string;
   workerId?: string;
+  submittedByName?: string;
   reviewType: 'case_note_review' | 'risk_review' | 'safety_plan_review' | 'documentation_gap' | 'workload_support' | 'client_progress' | 'assignment_note' | 'general_supervision';
+  status?: "pending" | "completed" | "no_action_required";
+  priority?: "low" | "medium" | "high" | "urgent";
   comment: string;
   actionRequired: boolean;
   actionDueDate?: string;
@@ -251,6 +257,7 @@ export interface TimelineItem {
     | 'risk_flag'
     | 'safety_plan'
     | 'generated_document'
+    | 'intake_assessment'
     | 'assignment'
     | 'supervisor_review'
     | 'status_change'
@@ -278,6 +285,8 @@ export interface ServiceActor {
   organizationId: string;
   role: Role;
   siteIds: string[];
+  firstName: string;
+  lastName: string;
 }
 
 export type WorkstreamType =
@@ -316,6 +325,7 @@ export interface Workstream {
   linkedNoteIds: string[];
   linkedTaskIds: string[];
   linkedReferralIds: string[];
+  linkedDocumentIds?: string[];
   priority: Priority;
   updatedAt: string;
 }

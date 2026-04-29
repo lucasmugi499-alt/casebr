@@ -77,11 +77,13 @@ export default function ClientProfilePage() {
   useEffect(() => {
     if (!user || !id) return;
 
-    const actor = {
+    const actor: any = {
       id: user.id,
       organizationId: user.organizationId,
       role: user.role,
       siteIds: user.siteIds,
+      firstName: user.firstName,
+      lastName: user.lastName,
     };
 
     const loadData = async () => {

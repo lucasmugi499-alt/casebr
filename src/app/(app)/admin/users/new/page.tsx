@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getDemoStore, addDemoUser, addDemoAuditLog } from "@/lib/demo/demoStore";
 import { Role, User, Site } from "@/types";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function CreateUserPage() {
@@ -258,5 +259,3 @@ export default function CreateUserPage() {
     </AuthGuard>
   );
 }
-
-import { cn } from "@/lib/utils";

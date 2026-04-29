@@ -134,9 +134,10 @@ const addWithTimestamp = <T extends { id: string; createdAt: string; updatedAt: 
   return [{ ...entity, createdAt: entity.createdAt ?? timestamp, updatedAt: entity.updatedAt ?? timestamp } as T, ...collection];
 };
 
-export const addDemoClient = (client: Omit<Client, "createdAt" | "updatedAt"> & Partial<Pick<Client, "createdAt" | "updatedAt">>): Client => {
+export const addDemoClient = (client: Omit<Client, "id" | "createdAt" | "updatedAt"> & Partial<Pick<Client, "id" | "createdAt" | "updatedAt">>): Client => {
   const store = getDemoStore();
-  const next = addWithTimestamp(store.clients, client);
+  const id = client.id || `client_${Date.now()}`;
+  const next = addWithTimestamp(store.clients, { ...client, id });
   const created = next[0];
   saveDemoStore({ ...store, clients: next });
   
@@ -157,12 +158,17 @@ export const initializeDemoClientChecklists = (clientId: string) => {
     intakeCompleted: false,
     consentCompleted: false,
     privacyExplained: false,
+    servicePlanStarted: false,
+    servicePlanCompleted: false,
     housingPlanStarted: false,
     housingPlanCompleted: false,
+    safetyScreeningCompleted: false,
     safetyPlanCompleted: false,
-    dischargeTransitionPlanDocumented: false,
     idStatusDocumented: false,
     incomeStatusDocumented: false,
+    emergencyContactDocumented: false,
+    referralsDocumented: false,
+    dischargeTransitionPlanDocumented: false,
     updatedAt: timestamp
   };
 
@@ -177,6 +183,7 @@ export const initializeDemoClientChecklists = (clientId: string) => {
     housingDocuments: "missing",
     medicalDocuments: "missing",
     legalDocuments: "missing",
+    other: "missing",
     updatedAt: timestamp
   };
 
@@ -199,24 +206,39 @@ export const initializeDemoClientWorkstreams = (clientId: string) => {
       status: "not_started",
       latestAction: "Client admitted. Housing search not yet initiated.",
       nextAction: "Complete housing plan",
+      assignedWorkerId: "",
+      linkedNoteIds: [],
+      linkedTaskIds: [],
+      linkedReferralIds: [],
+      priority: "medium",
       updatedAt: timestamp
     },
     {
       id: `ws_income_${clientId}`,
       clientId,
-      type: "income",
+      type: "income_benefits",
       status: "not_started",
       latestAction: "Income status verification pending.",
       nextAction: "Verify income documents",
+      assignedWorkerId: "",
+      linkedNoteIds: [],
+      linkedTaskIds: [],
+      linkedReferralIds: [],
+      priority: "medium",
       updatedAt: timestamp
     },
     {
       id: `ws_medical_${clientId}`,
       clientId,
-      type: "medical",
+      type: "health_medical",
       status: "not_started",
       latestAction: "Health needs assessment pending.",
       nextAction: "Complete medical history",
+      assignedWorkerId: "",
+      linkedNoteIds: [],
+      linkedTaskIds: [],
+      linkedReferralIds: [],
+      priority: "medium",
       updatedAt: timestamp
     }
   ];

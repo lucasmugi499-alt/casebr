@@ -52,6 +52,8 @@ export default function CaseworkerDashboard() {
         organizationId: user.organizationId,
         role: user.role,
         siteIds: user.siteIds,
+        firstName: user.firstName,
+        lastName: user.lastName,
       })
       .then((result) => {
         if (!active) return;

@@ -8,22 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { getDemoActor } from "@/lib/demo/demoMode";
 import { getDemoManagementDashboard } from "@/lib/demo/demoServices";
+import { addDemoAuditLog } from "@/lib/demo/demoStore";
 import { useEffect, useState, useMemo } from "react";
-import { 
-  BarChart3, 
-  Download, 
-  Users, 
-  Home, 
-  FileCheck, 
-  AlertTriangle,
-  FileText,
-  Filter,
-  PieChart,
-  LineChart,
-  ChevronRight
-} from "lucide-react";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 export default function ReportsPage() {
   const { user } = useAuth();
@@ -41,14 +27,43 @@ export default function ReportsPage() {
     }, 600);
   }, []);
 
-  const handleExport = (type: string) => {
-    toast.success(`Exporting ${type} report to CSV...`);
-    // Mock audit log for export
-    console.log(`Report exported: ${type}`);
+  const handleExport = (reportName: string) => {
+    const actor = getDemoActor();
+    if (!actor) return;
+
+    // 1. Audit Log
+    addDemoAuditLog({
+      organizationId: actor.organizationId,
+      siteId: actor.siteIds[0],
+      userId: actor.id,
+      action: "export_report",
+      entityType: "report",
+      entityId: reportName.toLowerCase().replace(/\s+/g, "_"),
+      metadata: { reportName, format: "csv" }
+    });
+
+    // 2. Generate CSV
+    const headers = ["Label", "Value"];
+    const rows = data.metrics.map((m: any) => [m.label, m.value]);
+    const csvContent = [headers, ...rows].map(r => r.join(",")).join("\n");
+    
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `casebridge_report_${reportName.toLowerCase().replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast.success(`${reportName} exported successfully.`);
   };
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">Generating report metrics...</div>;
   if (!data) return <div className="p-8 text-center">No reporting data available.</div>;
+
+  const getMetric = (label: string) => data.metrics.find((m: any) => m.label === label)?.value || 0;
 
   return (
     <AuthGuard allowedRoles={["manager", "admin", "ssa"]}>
@@ -59,11 +74,8 @@ export default function ReportsPage() {
             <p className="text-muted-foreground text-sm">System-wide performance, compliance, and outcome reporting.</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleExport("full_operational")}>
-              <Download className="h-4 w-4 mr-2" /> Export CSV
-            </Button>
-            <Button size="sm">
-              <Filter className="h-4 w-4 mr-2" /> Parameters
+            <Button variant="outline" size="sm" onClick={() => handleExport("Full Operational")}>
+              <Download className="h-4 w-4 mr-2" /> Export All
             </Button>
           </div>
         </div>
@@ -71,29 +83,29 @@ export default function ReportsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <ReportMetricCard 
             title="Active Clients" 
-            value={data.metrics.find((m: any) => m.label === "Active clients")?.value || 0} 
+            value={getMetric("Active clients")} 
             icon={<Users className="h-4 w-4" />}
-            trend="+12% from last month"
+            trend={`${getMetric("New intakes")} currently in intake`}
           />
           <ReportMetricCard 
             title="Clients Housed" 
-            value={data.metrics.find((m: any) => m.label === "Clients housed (MTD)")?.value || 0} 
+            value={getMetric("Clients housed (MTD)")} 
             icon={<Home className="h-4 w-4" />}
-            trend="+5 this week"
+            trend="Month-to-date performance"
             color="text-green-600"
           />
           <ReportMetricCard 
             title="Documentation Gaps" 
-            value={data.metrics.find((m: any) => m.label === "Documentation gaps")?.value || 0} 
+            value={getMetric("Documentation gaps")} 
             icon={<FileText className="h-4 w-4" />}
-            trend="Attention Required"
+            trend="Files requiring updates"
             color="text-amber-600"
           />
           <ReportMetricCard 
             title="Safety Reviews" 
-            value={data.metrics.find((m: any) => m.label === "Safety reviews due")?.value || 0} 
+            value={getMetric("Safety reviews due")} 
             icon={<AlertTriangle className="h-4 w-4" />}
-            trend="High Priority"
+            trend="High priority reviews"
             color="text-red-600"
           />
         </div>
@@ -101,40 +113,46 @@ export default function ReportsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2">
             <CardHeader>
-              <CardTitle className="text-lg">Referral & Intake Trends</CardTitle>
-              <CardDescription>Breakdown of incoming referrals by type and current status.</CardDescription>
+              <CardTitle className="text-lg">Program Snapshot</CardTitle>
+              <CardDescription>Breakdown of outcomes and referral statuses.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-end h-32 gap-2">
-                  {[45, 32, 56, 41, 67, 48, 52].map((h, i) => (
-                    <div key={i} className="flex-1 bg-primary/10 rounded-t-sm relative group">
-                      <div className="absolute bottom-0 w-full bg-primary rounded-t-sm transition-all hover:bg-primary/80" style={{ height: `${h}%` }} />
-                    </div>
-                  ))}
+              <div className="grid grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  <p className="text-xs font-bold uppercase text-muted-foreground">Housing Outcomes</p>
+                  <div className="space-y-3">
+                    <SourceItem label="Housed" value={data.housingOutcomes.housed} percentage={Math.round((data.housingOutcomes.housed / data.programSnapshot.totalClients) * 100)} color="bg-green-500" />
+                    <SourceItem label="Transferred" value={data.housingOutcomes.transferred} percentage={Math.round((data.housingOutcomes.transferred / data.programSnapshot.totalClients) * 100)} color="bg-blue-500" />
+                    <SourceItem label="Discharged" value={data.housingOutcomes.discharged} percentage={Math.round((data.housingOutcomes.discharged / data.programSnapshot.totalClients) * 100)} color="bg-slate-400" />
+                  </div>
                 </div>
-                <div className="flex justify-between text-[10px] text-muted-foreground font-bold uppercase">
-                  <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+                <div className="space-y-4">
+                  <p className="text-xs font-bold uppercase text-muted-foreground">Referral Statuses</p>
+                  <div className="space-y-3">
+                    {Object.entries(data.referralOutcomes).map(([status, count]: [string, any]) => (
+                      <SourceItem 
+                        key={status} 
+                        label={status.replace("_", " ").toUpperCase()} 
+                        value={count} 
+                        percentage={Math.round((count / (getMetric("Referrals made") || 1)) * 100)} 
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <div className="mt-8 grid grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <p className="text-xs font-bold uppercase text-muted-foreground">Top Referral Sources</p>
-                  <div className="space-y-2">
-                    <SourceItem label="Central Intake" value={42} percentage={45} />
-                    <SourceItem label="Street Outreach" value={28} percentage={30} />
-                    <SourceItem label="Self-Referral" value={15} percentage={16} />
-                    <SourceItem label="Police/EMS" value={8} percentage={9} />
-                  </div>
+              <div className="mt-8 pt-8 border-t grid grid-cols-3 gap-4">
+                <div className="text-center p-4 bg-muted/30 rounded-lg">
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground">Intake Comp.</p>
+                  <p className="text-xl font-bold">{data.documentationCompletion.intake}%</p>
                 </div>
-                <div className="space-y-3">
-                  <p className="text-xs font-bold uppercase text-muted-foreground">Status Breakdown</p>
-                  <div className="space-y-2">
-                    <SourceItem label="Active Intake" value={24} percentage={35} color="bg-blue-500" />
-                    <SourceItem label="Pending Review" value={18} percentage={25} color="bg-amber-500" />
-                    <SourceItem label="Waitlisted" value={32} percentage={40} color="bg-slate-400" />
-                  </div>
+                <div className="text-center p-4 bg-muted/30 rounded-lg">
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground">Housing Plans</p>
+                  <p className="text-xl font-bold">{data.documentationCompletion.housing}%</p>
+                </div>
+                <div className="text-center p-4 bg-muted/30 rounded-lg">
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground">Service Plans</p>
+                  <p className="text-xl font-bold">{data.documentationCompletion.service}%</p>
                 </div>
               </div>
             </CardContent>
@@ -144,34 +162,29 @@ export default function ReportsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <PieChart className="h-4 w-4 text-primary" /> Reports Queue
+                  <PieChart className="h-4 w-4 text-primary" /> Available Reports
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0 border-t">
                 <div className="divide-y">
-                  <ReportLink title="Site Comparison Report" description="Performance metrics across all locations." />
-                  <ReportLink title="Worker Workload Analysis" description="Cases and tasks per assigned worker." />
-                  <ReportLink title="Safety Compliance Audit" description="Review of all active safety plans." />
-                  <ReportLink title="SMIS Sync Status" description="Tracking of document copies to SMIS." />
-                  <ReportLink title="Funding & Outcomes" description="Grant-related performance indicators." />
+                  <ReportLink onClick={() => handleExport("Site Comparison")} title="Site Comparison Report" description="Performance metrics across all locations." />
+                  <ReportLink onClick={() => handleExport("Worker Workload")} title="Worker Workload Analysis" description="Cases and tasks per assigned worker." />
+                  <ReportLink onClick={() => handleExport("Safety Compliance")} title="Safety Compliance Audit" description="Review of all active safety plans." />
+                  <ReportLink onClick={() => handleExport("Documentation Gaps")} title="Documentation Gaps" description="Files requiring missing documentation." />
+                  <ReportLink onClick={() => handleExport("Outcomes")} title="Outcomes Report" description="Housing and discharge success tracking." />
                 </div>
               </CardContent>
-              <div className="p-4 bg-muted/30 border-t">
-                <Button variant="ghost" size="sm" className="w-full text-xs text-primary">
-                  View All Reports <ChevronRight className="ml-1 h-3 w-3" />
-                </Button>
-              </div>
             </Card>
 
             <Card className="bg-primary/5 border-primary/20">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <FileCheck className="h-4 w-4 text-primary" /> Compliance Tip
+                  <FileCheck className="h-4 w-4 text-primary" /> Management Insight
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-xs text-muted-foreground">
-                <p>94% of clients have completed Intake Assessments. The remaining 6% (12 clients) are overdue for assessment completion.</p>
-                <Button variant="link" className="p-0 h-auto text-[10px] mt-2 font-bold uppercase">View Overdue List</Button>
+                <p>{data.managementInsights[0]?.message}</p>
+                <p className="mt-2">{data.managementInsights[1]?.message}</p>
               </CardContent>
             </Card>
           </div>
@@ -212,12 +225,12 @@ function SourceItem({ label, value, percentage, color }: { label: string; value:
   );
 }
 
-function ReportLink({ title, description }: { title: string; description: string }) {
+function ReportLink({ title, description, onClick }: { title: string; description: string; onClick: () => void }) {
   return (
-    <button className="w-full p-4 text-left hover:bg-muted/50 transition-colors group">
+    <button onClick={onClick} className="w-full p-4 text-left hover:bg-muted/50 transition-colors group">
       <div className="flex items-center justify-between">
         <p className="text-xs font-bold group-hover:text-primary transition-colors">{title}</p>
-        <BarChart3 className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+        <Download className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
       <p className="text-[10px] text-muted-foreground">{description}</p>
     </button>

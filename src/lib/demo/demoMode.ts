@@ -38,5 +38,7 @@ export const getDemoActor = (): ServiceActor | null => {
     organizationId: profile.organizationId,
     role: profile.role,
     siteIds: profile.siteIds,
+    firstName: profile.firstName,
+    lastName: profile.lastName,
   };
 };
