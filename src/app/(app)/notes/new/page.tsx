@@ -11,14 +11,9 @@ import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/AuthContext";
 import { getDemoActor } from "@/lib/demo/demoMode";
 import { 
-  addDemoCaseNote, 
-  addDemoTask, 
-  addDemoReferral, 
-  addDemoRiskFlag,
-  updateDemoWorkstream,
-  addDemoTimelineItem,
-  getDemoStore
-} from "@/lib/demo/demoStore";
+  completeDemoCaseNoteWorkflow,
+  copyDemoCaseNoteToSmis
+} from "@/lib/demo/generatedDocumentWorkflow";
 import { getDemoClientsForUser, getDemoNeedsForClient, getDemoWorkstreamsForClient, getDemoGeneratedDocumentsForClient } from "@/lib/demo/demoServices";
 import { generateCaseNoteText, CaseNoteAnswers } from "@/lib/casework/caseNoteGenerator";
 import { Client, ContactType, NoteCategory, WorkstreamType, Priority } from "@/types";
@@ -76,6 +71,7 @@ export default function NewCaseNotePage() {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [savedNoteId, setSavedNoteId] = useState<string | null>(null);
 
   // Form State
   const [selectedClientId, setSelectedClientId] = useState(initialClientId);
@@ -149,70 +145,38 @@ export default function NewCaseNotePage() {
 
     setSaving(true);
     try {
-      const noteId = `note_${Date.now()}`;
-      
-      // 1. Save Note
-      addDemoCaseNote({
-        id: noteId,
-        clientId: selectedClient.id,
-        authorId: actor.id,
-        authorName: `${actor.firstName} ${actor.lastName}`,
-        contactDate: answers.contactDate,
-        contactType: answers.contactType,
-        category: answers.noteCategory,
-        finalNote: finalNote,
-        roughSummary: answers.roughSummary,
-        organizationId: actor.organizationId,
-        siteId: selectedClient.siteId,
-        aiGenerated: true,
-        followUpRequired: answers.followUpRequired,
-        supervisorReviewed: false
-      });
-
-      // 2. Side Effects
-      
-      // Update Workstream
-      if (answers.relatedWorkstream) {
-        updateDemoWorkstream(selectedClient.id, answers.relatedWorkstream, {
-          latestAction: answers.actionTaken || "Case note documented.",
-          updatedAt: new Date().toISOString(),
-          status: "in_progress"
-        });
-      }
-
-      // Create Task
-      if (answers.followUpRequired && answers.nextAction) {
-        addDemoTask({
-          id: `task_note_${Date.now()}`,
+      const savedNote = completeDemoCaseNoteWorkflow({
+        client: selectedClient,
+        actor,
+        noteData: {
+          clientId: selectedClient.id,
+          authorId: actor.id,
+          authorName: `${actor.firstName} ${actor.lastName}`,
+          contactDate: answers.contactDate,
+          contactType: answers.contactType,
+          category: answers.noteCategory,
+          finalNote: finalNote,
+          roughSummary: answers.roughSummary,
           organizationId: actor.organizationId,
           siteId: selectedClient.siteId,
-          clientId: selectedClient.id,
-          assignedToId: actor.id,
-          createdById: actor.id,
-          title: answers.nextAction,
+          aiGenerated: true,
+          followUpRequired: answers.followUpRequired,
+          supervisorReviewed: false
+        },
+        relatedWorkstreamType: answers.relatedWorkstream,
+        createTask: answers.followUpRequired && !!answers.nextAction,
+        taskData: {
+          title: answers.nextAction || `Follow-up from ${answers.noteCategory}`,
           description: `Follow-up from case note on ${answers.contactDate}.`,
           dueDate: answers.dueDate || new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-          priority: "medium",
-          status: "open",
-        });
-      }
-
-      // Timeline Item
-      addDemoTimelineItem({
-        id: `tl_note_${Date.now()}`,
-        type: "case_note",
-        date: new Date().toISOString(),
-        title: `Case Note: ${answers.noteCategory.replace("_", " ")}`,
-        summary: answers.roughSummary || "Interaction documented.",
-        staffId: actor.id,
-        entityId: noteId,
-        entityType: "caseNote",
-        status: "completed",
-        relatedWorkstream: answers.relatedWorkstream
+          priority: "medium"
+        }
       });
 
+      setSavedNoteId(savedNote.id);
+
       toast.success("Case note saved to client file.");
-      router.push(`/clients/${selectedClient.id}?tab=notes`);
+      router.push(`/clients/${selectedClient.id}?tab=notes&success=note_saved`);
     } catch (err) {
       console.error(err);
       toast.error("Failed to save note.");
@@ -224,8 +188,14 @@ export default function NewCaseNotePage() {
   const handleCopy = () => {
     navigator.clipboard.writeText(finalNote);
     setCopied(true);
+    toast.success("Copied to clipboard for SMIS");
+    
+    const actor = getDemoActor();
+    if (actor && selectedClient && savedNoteId) {
+      copyDemoCaseNoteToSmis(selectedClient.id, savedNoteId, actor);
+    }
+    
     setTimeout(() => setCopied(false), 2000);
-    toast.success("Copied to clipboard.");
   };
 
   return (

@@ -5,6 +5,17 @@ import {
   Site,
   Organization,
   User,
+  Client,
+  CaseNote,
+  Task,
+  Referral,
+  RiskFlag,
+  SafetyPlan,
+  SupervisorReview,
+  ClientNeed,
+  DocumentationChecklist,
+  DocumentChecklist,
+  GeneratedDocument,
 } from "@/types";
 import {
   demoAuditLogs,
@@ -128,7 +139,92 @@ export const addDemoClient = (client: Omit<Client, "createdAt" | "updatedAt"> & 
   const next = addWithTimestamp(store.clients, client);
   const created = next[0];
   saveDemoStore({ ...store, clients: next });
+  
+  // Auto-initialize side effects
+  initializeDemoClientChecklists(created.id);
+  initializeDemoClientWorkstreams(created.id);
+  
   return created;
+};
+
+export const initializeDemoClientChecklists = (clientId: string) => {
+  const store = getDemoStore();
+  const timestamp = new Date().toISOString();
+  
+  // 1. Documentation Summary Checklist
+  const documentationChecklist: DocumentationChecklist = {
+    clientId,
+    intakeCompleted: false,
+    consentCompleted: false,
+    privacyExplained: false,
+    housingPlanStarted: false,
+    housingPlanCompleted: false,
+    safetyPlanCompleted: false,
+    dischargeTransitionPlanDocumented: false,
+    idStatusDocumented: false,
+    incomeStatusDocumented: false,
+    updatedAt: timestamp
+  };
+
+  // 2. Specific Document Checklist
+  const documentChecklist: DocumentChecklist = {
+    clientId,
+    governmentId: "missing",
+    healthCard: "missing",
+    sin: "missing",
+    proofOfIncome: "missing",
+    noticeOfAssessment: "missing",
+    housingDocuments: "missing",
+    medicalDocuments: "missing",
+    legalDocuments: "missing",
+    updatedAt: timestamp
+  };
+
+  saveDemoStore({
+    ...store,
+    documentationChecklists: [documentationChecklist, ...store.documentationChecklists],
+    documentChecklists: [documentChecklist, ...store.documentChecklists]
+  });
+};
+
+export const initializeDemoClientWorkstreams = (clientId: string) => {
+  const store = getDemoStore();
+  const timestamp = new Date().toISOString();
+  
+  const defaultWorkstreams: Workstream[] = [
+    {
+      id: `ws_housing_${clientId}`,
+      clientId,
+      type: "housing",
+      status: "not_started",
+      latestAction: "Client admitted. Housing search not yet initiated.",
+      nextAction: "Complete housing plan",
+      updatedAt: timestamp
+    },
+    {
+      id: `ws_income_${clientId}`,
+      clientId,
+      type: "income",
+      status: "not_started",
+      latestAction: "Income status verification pending.",
+      nextAction: "Verify income documents",
+      updatedAt: timestamp
+    },
+    {
+      id: `ws_medical_${clientId}`,
+      clientId,
+      type: "medical",
+      status: "not_started",
+      latestAction: "Health needs assessment pending.",
+      nextAction: "Complete medical history",
+      updatedAt: timestamp
+    }
+  ];
+
+  saveDemoStore({
+    ...store,
+    workstreams: [...defaultWorkstreams, ...store.workstreams]
+  });
 };
 
 export const addDemoCaseNote = (note: Omit<CaseNote, "createdAt" | "updatedAt"> & Partial<Pick<CaseNote, "createdAt" | "updatedAt">>): CaseNote => {
@@ -350,7 +446,8 @@ export const assignDemoClient = (
     // Add timeline item
     addDemoTimelineItem({
       id: `assign_${Date.now()}`,
-      type: "task",
+      clientId: clientId,
+      type: "assignment" as any,
       date: new Date().toISOString(),
       title: "Client Assigned",
       summary: note || `Client assigned to ${workerIds.length} worker(s).`,

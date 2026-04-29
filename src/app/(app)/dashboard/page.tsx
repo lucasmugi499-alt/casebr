@@ -82,7 +82,7 @@ export default function CaseworkerDashboard() {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Link href="/clients/notes/new" className={buttonVariants()}><Plus className="mr-2 h-4 w-4" />Add Case Note</Link>
+          <Link href="/notes/new" className={buttonVariants()}><Plus className="mr-2 h-4 w-4" />Add Case Note</Link>
           <Link href="/clients/new" className={buttonVariants({ variant: "outline" })}><Plus className="mr-2 h-4 w-4" />Add Client</Link>
           <Link href="/tasks/new" className={buttonVariants({ variant: "outline" })}><Plus className="mr-2 h-4 w-4" />Add Follow-Up</Link>
           <Link href="/clients" className={buttonVariants({ variant: "outline" })}><Plus className="mr-2 h-4 w-4" />Add Referral</Link>

@@ -47,6 +47,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const userDoc = await getDoc(doc(db, "users", fUser.uid));
     if (!userDoc.exists()) {
+      console.warn("Auth success but no Firestore profile found. Signing out.");
+      await firebaseSignOut(auth);
       setUser(null);
       return;
     }

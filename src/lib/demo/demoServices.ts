@@ -46,6 +46,11 @@ export const getDemoClientById = (clientId: string, actor: ServiceActor): Client
 
 export const getDemoNotesForClient = (clientId: string): CaseNote[] => getDemoStore().caseNotes.filter((note) => note.clientId === clientId).sort((a, b) => b.contactDate.localeCompare(a.contactDate));
 export const getDemoTasksForClient = (clientId: string): Task[] => getDemoStore().tasks.filter((task) => task.clientId === clientId).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+export const getDemoTasksForUser = (actor: ServiceActor): Task[] => {
+  const store = getDemoStore();
+  if (actor.role === "admin" || actor.role === "manager") return store.tasks;
+  return store.tasks.filter(t => t.assignedToId === actor.id || (actor.role === "ssa" && actor.siteIds.includes(t.siteId)));
+};
 export const getDemoReferralsForClient = (clientId: string): Referral[] => getDemoStore().referrals.filter((referral) => referral.clientId === clientId).sort((a, b) => b.referralDate.localeCompare(a.referralDate));
 export const getDemoRiskFlagsForClient = (clientId: string): RiskFlag[] => getDemoStore().riskFlags.filter((flag) => flag.clientId === clientId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 export const getDemoSafetyPlansForClient = (clientId: string): SafetyPlan[] => getDemoStore().safetyPlans.filter((plan) => plan.clientId === clientId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -438,4 +443,19 @@ export const getDemoManagementDashboard = (_actor: ServiceActor) => {
     activeRiskFlags: store.riskFlags.filter((risk) => risk.active).length,
     safetyPlansDue: store.safetyPlans.filter((plan) => plan.status === "review_due").length,
   };
+};
+
+export const getDemoAllRiskFlags = (): RiskFlag[] => {
+  return getDemoStore().riskFlags;
+};
+
+export const getDemoAllSafetyPlans = (): SafetyPlan[] => {
+  return getDemoStore().safetyPlans;
+};
+
+export const getDemoAllGeneratedDocuments = (): GeneratedDocument[] => {
+  return getDemoStore().generatedDocuments;
+};
+export const getDemoAllSupervisorReviews = (): SupervisorReview[] => {
+  return getDemoStore().supervisorReviews;
 };

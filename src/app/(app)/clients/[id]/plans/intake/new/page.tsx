@@ -11,14 +11,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/contexts/AuthContext";
 import { getDemoActor } from "@/lib/demo/demoMode";
 import { 
-  addDemoTimelineItem, 
-  addDemoTask, 
-  upsertDemoGeneratedDocument,
-  updateDemoDocumentationChecklist,
-  updateDemoClient,
-  addDemoClientNeed,
-  addDemoAuditLog
-} from "@/lib/demo/demoStore";
+  completeDemoGeneratedDocumentWorkflow,
+  copyDemoDocumentToSmis
+} from "@/lib/demo/generatedDocumentWorkflow";
 import { clientsService } from "@/lib/services/clientsService";
 import { generateIntakeAssessmentText, IntakeAssessmentAnswers } from "@/lib/casework/intakePlanGenerator";
 import { Client, GeneratedDocument } from "@/types";
@@ -60,6 +55,7 @@ export default function NewIntakeAssessmentPage() {
   const [generatedText, setGeneratedText] = useState("");
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [savedDocId, setSavedDocId] = useState<string | null>(null);
 
   const storageKey = useMemo(() => `intake_draft_${id}`, [id]);
 
@@ -103,85 +99,40 @@ export default function NewIntakeAssessmentPage() {
 
     setSaving(true);
     try {
-      const docId = `doc_intake_${Date.now()}`;
-      const document: GeneratedDocument = {
-        id: docId,
-        clientId: client.id,
-        organizationId: actor.organizationId,
-        siteId: client.siteId,
-        type: "intake_assessment",
+      const clientNeedsData = answers.priorityNeeds?.map(needType => ({
+        needType: needType as any,
+        priority: "high" as const,
+        status: "identified" as const,
+        recommendedNextAction: `Address ${needType.replace("_", " ")} identified during intake.`,
+      })) || [];
+
+      const savedDoc = completeDemoGeneratedDocumentWorkflow({
+        client,
+        actor,
+        documentType: "intake_assessment",
         title: `Intake Assessment - ${client.displayName}`,
-        status: "completed",
         generatedText,
-        sourceAnswers: answers as any,
-        createdById: actor.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      // 1. Save document
-      upsertDemoGeneratedDocument(document);
-
-      // 2. Update documentation checklist
-      updateDemoDocumentationChecklist(client.id, { 
-        intakeCompleted: true,
-        consentCompleted: answers.consentSigned || false,
-        privacyExplained: answers.privacyExplained || false
+        sourceAnswers: answers,
+        checklistUpdates: { 
+          intakeCompleted: true,
+          consentCompleted: answers.consentSigned || false,
+          privacyExplained: answers.privacyExplained || false
+        },
+        statusUpdate: client.status === "intake" ? "active" : undefined,
+        createClientNeeds: clientNeedsData.length > 0,
+        clientNeedsData: clientNeedsData
       });
 
-      // 3. Update client status to active if it was intake
-      if (client.status === "intake") {
-        updateDemoClient(client.id, { status: "active" });
-      }
+      setSavedDocId(savedDoc.id);
 
-      // 4. Create needs based on priorities
-      if (answers.priorityNeeds?.length) {
-        answers.priorityNeeds.forEach(needType => {
-           addDemoClientNeed({
-             id: `need_${Date.now()}_${needType}`,
-             clientId: client.id,
-             needType: needType as any,
-             priority: "high",
-             status: "not_started",
-             recommendedNextAction: `Address ${needType.replace("_", " ")} identified during intake.`,
-             relatedDocumentTypes: [],
-             createdAt: new Date().toISOString(),
-             updatedAt: new Date().toISOString()
-           });
-        });
-      }
-
-      // 5. Add timeline item
-      addDemoTimelineItem({
-        id: `tl_intake_${Date.now()}`,
-        clientId: client.id,
-        type: "generated_document",
-        date: new Date().toISOString(),
-        title: "Intake Assessment Completed",
-        summary: "Client intake assessment finalized. Status updated to Active.",
-        staffId: actor.id,
-        entityId: docId,
-        entityType: "generatedDocument",
-        status: "completed"
-      });
-
-      // 6. Add Audit Log
-      addDemoAuditLog({
-        organizationId: actor.organizationId,
-        siteId: client.siteId,
-        userId: actor.id,
-        action: "complete_intake",
-        entityType: "client",
-        entityId: client.id,
-        metadata: { docId }
-      });
-
-      // 7. Clear draft
+      // Clear draft
       window.localStorage.removeItem(storageKey);
 
-      // 8. Success!
       toast.success("Intake Assessment saved to client file");
       router.push(`/clients/${client.id}?tab=plans&success=intake_completed`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to save intake assessment");
     } finally {
       setSaving(false);
     }
@@ -333,6 +284,12 @@ export default function NewIntakeAssessmentPage() {
                 navigator.clipboard.writeText(generatedText);
                 setCopied(true);
                 toast.success("Copied for SMIS");
+                
+                const actor = getDemoActor();
+                if (actor && client && savedDocId) {
+                  copyDemoDocumentToSmis(client.id, savedDocId, actor);
+                }
+                
                 setTimeout(() => setCopied(false), 2000);
               }}>
                 <ClipboardCopy className="h-4 w-4 mr-2" /> {copied ? "Copied!" : "Copy for SMIS"}

@@ -10,13 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import { getDemoActor } from "@/lib/demo/demoMode";
 import { 
-  addDemoTimelineItem, 
-  addDemoTask, 
-  upsertDemoGeneratedDocument,
-  updateDemoDocumentationChecklist,
-  updateDemoWorkstream,
-  addDemoSupervisorReview
-} from "@/lib/demo/demoStore";
+  completeDemoGeneratedDocumentWorkflow,
+  copyDemoDocumentToSmis
+} from "@/lib/demo/generatedDocumentWorkflow";
 import { clientsService } from "@/lib/services/clientsService";
 import { generateSafetyPlanText, SafetyPlanAnswers } from "@/lib/casework/safetyPlanGenerator";
 import { Client, GeneratedDocument, SupervisorReview } from "@/types";
@@ -63,6 +59,7 @@ export default function NewSafetyPlanPage() {
   const [generatedText, setGeneratedText] = useState("");
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [savedDocId, setSavedDocId] = useState<string | null>(null);
 
   const storageKey = useMemo(() => `safety_plan_draft_${id}`, [id]);
 
@@ -105,8 +102,14 @@ export default function NewSafetyPlanPage() {
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedText);
     setCopied(true);
+    toast.success("Copied to clipboard for SMIS");
+    
+    const actor = getDemoActor();
+    if (actor && client && savedDocId) {
+      copyDemoDocumentToSmis(client.id, savedDocId, actor);
+    }
+    
     setTimeout(() => setCopied(false), 2000);
-    toast.success("Copied to clipboard");
   };
 
   const finalizePlan = () => {
@@ -115,101 +118,31 @@ export default function NewSafetyPlanPage() {
 
     setSaving(true);
     try {
-      const docId = `doc_safety_${Date.now()}`;
-      const document: GeneratedDocument = {
-        id: docId,
-        clientId: client.id,
-        organizationId: actor.organizationId,
-        siteId: client.siteId,
-        type: "safety_plan",
+      const savedDoc = completeDemoGeneratedDocumentWorkflow({
+        client,
+        actor,
+        documentType: "safety_plan",
         title: `Safety Plan - ${client.displayName}`,
-        status: answers.reviewDate ? "review_due" : "completed",
         generatedText,
-        sourceAnswers: answers as any,
-        createdById: actor.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        reviewDate: answers.reviewDate
-      };
-
-      // 1. Save document
-      upsertDemoGeneratedDocument(document);
-
-      // 2. Update documentation checklist
-      updateDemoDocumentationChecklist(client.id, { safetyPlanCompleted: true });
-
-      // 3. Update safety workstream
-      updateDemoWorkstream(client.id, "safety", {
-        status: "in_progress",
-        latestAction: "Safety Plan completed.",
-        nextAction: answers.nextAction || "Monitor and support as per plan."
-      });
-
-      // 4. Add timeline item
-      addDemoTimelineItem({
-        id: `tl_safety_${Date.now()}`,
-        type: "safety_plan",
-        date: new Date().toISOString(),
-        title: "Safety Plan completed",
-        summary: "Professional safety plan generated and saved to client file.",
-        staffId: actor.id,
-        entityId: docId,
-        entityType: "generatedDocument",
-        relatedWorkstream: "safety",
-        status: "completed"
-      });
-
-      // 5. Create follow-up task if requested
-      if (answers.createTask === "yes" && answers.nextAction) {
-        addDemoTask({
-          id: `task_safety_${Date.now()}`,
-          organizationId: actor.organizationId,
-          siteId: client.siteId,
-          clientId: client.id,
-          assignedToId: actor.id,
-          createdById: actor.id,
-          title: `Safety Follow-up: ${answers.nextAction}`,
+        sourceAnswers: answers,
+        relatedWorkstreamType: "safety",
+        checklistUpdates: { safetyPlanCompleted: true },
+        reviewDate: answers.reviewDate,
+        createTask: answers.createTask === "yes",
+        taskData: {
+          title: `Safety Follow-up: ${answers.nextAction || "General Safety Review"}`,
           description: "Follow-up required from safety plan completion.",
           dueDate: answers.dueDate || new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-          priority: "high",
-          status: "open",
-        });
-      }
+          priority: "high"
+        },
+        supervisorReviewRequested: answers.requestSupervisorReview === "yes" || answers.supervisorReviewRequired === "yes"
+      });
 
-      // 6. Request supervisor review if selected
-      if (answers.requestSupervisorReview === "yes" || answers.supervisorReviewRequired === "yes") {
-        addDemoSupervisorReview({
-          id: `rev_safety_${Date.now()}`,
-          organizationId: actor.organizationId,
-          siteId: client.siteId,
-          clientId: client.id,
-          supervisorId: "demo_ssa", // Default to demo supervisor
-          workerId: actor.id,
-          reviewType: "safety_plan",
-          comment: "Supervisor review requested for new safety plan.",
-          actionRequired: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-        
-        addDemoTimelineItem({
-          id: `tl_rev_${Date.now()}`,
-          type: "supervisor_review",
-          date: new Date().toISOString(),
-          title: "Supervisor Review Requested",
-          summary: "Safety plan submitted for supervisor review.",
-          staffId: actor.id,
-          entityId: docId,
-          entityType: "generatedDocument",
-          relatedWorkstream: "safety",
-          status: "pending"
-        });
-      }
+      setSavedDocId(savedDoc.id);
 
-      // 7. Clear draft
+      // Clear draft
       window.localStorage.removeItem(storageKey);
 
-      // 8. Success!
       toast.success("Safety Plan saved to client file");
       router.push(`/clients/${client.id}?tab=plans&success=safety_plan_saved`);
     } catch (err) {

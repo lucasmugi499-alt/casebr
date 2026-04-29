@@ -21,7 +21,7 @@ export default function AuthGuard({
       return;
     }
 
-    if (!user && !firebaseUser) {
+    if (!user) {
       router.push("/login");
       return;
     }

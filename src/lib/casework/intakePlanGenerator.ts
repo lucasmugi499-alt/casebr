@@ -13,6 +13,8 @@ export interface IntakeAssessmentAnswers {
   priorityNeeds?: string[];
   nextAction?: string;
   dueDate?: string;
+  consentNotes?: string;
+  unhousedDuration?: string;
 }
 
 export const generateIntakeAssessmentText = (

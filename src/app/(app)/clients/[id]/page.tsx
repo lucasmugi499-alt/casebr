@@ -45,14 +45,20 @@ import {
   Link as LinkIcon
 } from "lucide-react";
 import { toast } from "sonner";
+import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 
 export default function ClientProfilePage() {
-  const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { id } = useParams() as { id: string };
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const activeTab = searchParams.get("tab") || "overview";
+  const successParam = searchParams.get("success");
+
   const [client, setClient] = useState<Client | null>(null);
   const [notes, setNotes] = useState<CaseNote[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -97,9 +103,6 @@ export default function ClientProfilePage() {
             setRiskFlags(getDemoRiskFlagsForClient(id));
             setSafetyPlans(getDemoSafetyPlansForClient(id));
           }
-        } else {
-          // Real service calls would go here
-          // Keeping existing structure but focusing on demo for now
         }
       } finally {
         setLoading(false);
@@ -108,6 +111,34 @@ export default function ClientProfilePage() {
 
     loadData();
   }, [id, user]);
+
+  useEffect(() => {
+    if (successParam) {
+      const messages: Record<string, string> = {
+        housing_plan_saved: "Housing Plan has been saved and documented.",
+        safety_plan_saved: "Safety Plan has been saved and documented.",
+        service_plan_saved: "Service Plan has been updated.",
+        intake_completed: "Intake Assessment completed successfully.",
+        note_saved: "Case note added to client record.",
+        checklist_saved: "Document checklist updated."
+      };
+
+      if (messages[successParam]) {
+        toast.success(messages[successParam]);
+      }
+
+      // Clear the success param from URL without refreshing
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("success");
+      router.replace(`${pathname}?${params.toString()}`);
+    }
+  }, [successParam, pathname, router, searchParams]);
+
+  const handleTabChange = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", value);
+    router.replace(`${pathname}?${params.toString()}`);
+  };
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">Loading client work file...</div>;
   if (!client) return <div className="p-8 text-center">Client not found or access denied.</div>;
@@ -137,7 +168,7 @@ export default function ClientProfilePage() {
   const nextBestActions: { text: string; action?: string; link?: string }[] = [];
   const housingNeed = needs.find(n => n.needType === "housing_support");
   const safetyNeed = needs.find(n => n.needType === "safety_planning");
-  const serviceNeed = needs.find(n => n.needType === "service_plan_needed" || n.needType === "other"); // Mapping service plan need
+  const serviceNeed = needs.find(n => n.needType === "service_planning");
   const hasHousingPlan = documents.some(d => d.type === "housing_plan");
   const hasSafetyPlan = documents.some(d => d.type === "safety_plan");
   const hasServicePlan = documents.some(d => d.type === "service_plan");
@@ -255,7 +286,7 @@ export default function ClientProfilePage() {
         </div>
 
         {/* TABS */}
-        <Tabs defaultValue="overview" className="w-full">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="grid w-full grid-cols-5 h-12">
             <TabsTrigger value="overview">1. Overview</TabsTrigger>
             <TabsTrigger value="timeline">2. Timeline</TabsTrigger>
@@ -304,14 +335,14 @@ export default function ClientProfilePage() {
                                 href={
                                   isHousing ? `/clients/${client.id}/plans/housing/new` : 
                                   (need.needType === "safety_planning" ? `/clients/${client.id}/plans/safety/new` : 
-                                  (need.needType === "service_plan_needed" ? `/clients/${client.id}/plans/service/new` : 
+                                  (need.needType === "service_planning" ? `/clients/${client.id}/plans/service/new` : 
                                   (need.needType === "discharge_transition_planning" ? `/clients/${client.id}/plans/discharge/new` : "#")))
                                 } 
                                 className={buttonVariants({ variant: "ghost", size: "sm", className: "h-8 px-2 text-primary" })}
                               >
                                 {doc ? (
                                   (isSafetyReviewDue && need.needType === "safety_planning") || 
-                                  (isServiceReviewDue && need.needType === "service_plan_needed") ? "Update Plan" : 
+                                  (isServiceReviewDue && need.needType === "service_planning") ? "Update Plan" : 
                                   (doc.status === "draft" ? "Continue Plan" : "Review Plan")
                                 ) : "Start Plan"} <ArrowRight className="ml-1 h-3 w-3" />
                               </Link>
@@ -458,9 +489,9 @@ export default function ClientProfilePage() {
                         {item.type === "case_note" && <FileText className="h-4 w-4" />}
                         {item.type === "task" && <CheckCircle2 className="h-4 w-4" />}
                         {item.type === "referral" && <ExternalLink className="h-4 w-4" />}
-                        {item.type === "service_plan" && <Target className="h-4 w-4" />}
-                        {(item.type === "discharge_transition_plan" || item.type === "housing_plan") && <ClipboardCheck className="h-4 w-4" />}
+                        {item.type === "risk_flag" && <ShieldAlert className="h-4 w-4" />}
                         {item.type === "safety_plan" && <ShieldAlert className="h-4 w-4" />}
+                        {item.type === "generated_document" && <FileText className="h-4 w-4" />}
                       </div>
                       <div className="w-px flex-1 bg-muted mt-2" />
                     </div>

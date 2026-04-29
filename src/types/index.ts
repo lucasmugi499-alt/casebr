@@ -47,7 +47,7 @@ export interface UserProfile {
 
 export type User = UserProfile;
 
-export type ClientStatus = 'intake' | 'active' | 'follow_up_needed' | 'housed' | 'discharged' | 'inactive';
+export type ClientStatus = 'intake' | 'active' | 'follow_up_needed' | 'housed' | 'discharged' | 'inactive' | 'transferred' | 'follow_up_support';
 export type Priority = 'low' | 'medium' | 'high';
 
 export interface Client {
@@ -114,6 +114,7 @@ export interface CaseNote {
   siteId: string;
   clientId: string;
   authorId: string;
+  authorName?: string;
   contactDate: string;
   contactType: ContactType;
   category: NoteCategory;
@@ -333,7 +334,10 @@ export type ClientNeedType =
   | 'life_skills_support'
   | 'discharge_transition_planning'
   | 'appointment_accompaniment'
-  | 'referral_follow_up';
+  | 'referral_follow_up'
+  | 'service_planning'
+  | 'intake_assessment'
+  | 'document_checklist';
 
 export type NeedStatus =
   | 'identified'

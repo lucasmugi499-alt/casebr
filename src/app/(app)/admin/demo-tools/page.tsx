@@ -17,7 +17,8 @@ import {
   Zap,
   Code
 } from "lucide-react";
-import { getDemoStore, exitDemoMode } from "@/lib/demo/demoStore";
+import { getDemoStore } from "@/lib/demo/demoStore";
+import { exitDemoMode } from "@/lib/demo/demoMode";
 import { toast } from "sonner";
 
 export default function DemoToolsPage() {

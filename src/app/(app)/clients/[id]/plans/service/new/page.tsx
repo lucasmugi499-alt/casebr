@@ -10,14 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import { getDemoActor } from "@/lib/demo/demoMode";
 import { 
-  addDemoTimelineItem, 
-  addDemoTask, 
-  addDemoReferral,
-  upsertDemoGeneratedDocument,
-  updateDemoDocumentationChecklist,
-  updateDemoWorkstream,
-  addDemoSupervisorReview
-} from "@/lib/demo/demoStore";
+  completeDemoGeneratedDocumentWorkflow,
+  copyDemoDocumentToSmis
+} from "@/lib/demo/generatedDocumentWorkflow";
 import { getDemoGeneratedDocumentsForClient } from "@/lib/demo/demoServices";
 import { clientsService } from "@/lib/services/clientsService";
 import { generateServicePlanText, ServicePlanAnswers, ActionStep } from "@/lib/casework/servicePlanGenerator";
@@ -87,6 +82,7 @@ export default function NewServicePlanPage() {
   const [generatedText, setGeneratedText] = useState("");
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [savedDocId, setSavedDocId] = useState<string | null>(null);
 
   const storageKey = useMemo(() => `service_plan_draft_${id}`, [id]);
 
@@ -128,8 +124,14 @@ export default function NewServicePlanPage() {
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedText);
     setCopied(true);
+    toast.success("Copied to clipboard for SMIS");
+    
+    const actor = getDemoActor();
+    if (actor && client && savedDocId) {
+      copyDemoDocumentToSmis(client.id, savedDocId, actor);
+    }
+    
     setTimeout(() => setCopied(false), 2000);
-    toast.success("Copied to clipboard");
   };
 
   const addActionStep = () => {
@@ -161,96 +163,40 @@ export default function NewServicePlanPage() {
 
     setSaving(true);
     try {
-      const docId = `doc_service_${Date.now()}`;
-      const document: GeneratedDocument = {
-        id: docId,
-        clientId: client.id,
-        organizationId: actor.organizationId,
-        siteId: client.siteId,
-        type: "service_plan",
-        title: `Service Plan - ${client.displayName}`,
-        status: answers.reviewDate ? "review_due" : "completed",
-        generatedText,
-        sourceAnswers: answers as any,
-        createdById: actor.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        reviewDate: answers.reviewDate
-      };
-
-      const existingDocs = getDemoGeneratedDocumentsForClient(client.id);
-      const isUpdate = existingDocs.some(d => d.type === "service_plan");
-      
-      upsertDemoGeneratedDocument(document);
-      updateDemoDocumentationChecklist(client.id, { servicePlanCompleted: true });
-
-      updateDemoWorkstream(client.id, "other", {
-        status: "in_progress",
-        latestAction: isUpdate ? "Service Plan updated." : "Service Plan completed.",
-        nextAction: answers.staffFollowUpNotes || "Follow up on action steps."
-      });
-
-      addDemoTimelineItem({
-        id: `tl_service_${Date.now()}`,
-        type: "service_plan",
-        date: new Date().toISOString(),
-        title: isUpdate ? "Service Plan updated" : "Service Plan completed",
-        summary: isUpdate ? "Existing service plan and goals reviewed and updated." : "SMIS-ready service plan and goals documented.",
-        staffId: actor.id,
-        entityId: docId,
-        entityType: "generatedDocument",
-        status: "completed"
-      });
-
-      if (answers.createTasksFromSteps === "yes" && answers.actionSteps) {
-        answers.actionSteps.forEach((step, idx) => {
-          addDemoTask({
-            id: `task_sp_${Date.now()}_${idx}`,
-            organizationId: actor.organizationId,
-            siteId: client.siteId,
-            clientId: client.id,
-            assignedToId: step.responsible === "caseworker" ? actor.id : actor.id, // Simplification for demo
-            createdById: actor.id,
+      const taskData = (answers.createTasksFromSteps === "yes" && answers.actionSteps) 
+        ? answers.actionSteps.map(step => ({
             title: `${step.category}: ${step.action}`,
             description: `Action step from Service Plan. Responsible: ${step.responsible}`,
             dueDate: step.dueDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             priority: step.priority,
-            status: "open",
-          });
-        });
-      }
+          }))
+        : [];
 
-      if (answers.createReferralsFromPlan === "yes" && answers.referralTypes) {
-        answers.referralTypes.forEach((type, idx) => {
-          addDemoReferral({
-            id: `ref_sp_${Date.now()}_${idx}`,
-            organizationId: actor.organizationId,
-            siteId: client.siteId,
-            clientId: client.id,
-            createdById: actor.id,
+      const referralData = (answers.createReferralsFromPlan === "yes" && answers.referralTypes)
+        ? answers.referralTypes.map(type => ({
             referralType: type as ReferralType,
             agencyName: answers.agenciesToContact || "To be determined",
-            referralDate: new Date().toISOString(),
-            status: "pending",
-          });
-        });
-      }
+          }))
+        : [];
 
-      if (answers.requestSupervisorReview === "yes") {
-        addDemoSupervisorReview({
-          id: `rev_sp_${Date.now()}`,
-          organizationId: actor.organizationId,
-          siteId: client.siteId,
-          clientId: client.id,
-          supervisorId: "demo_ssa",
-          workerId: actor.id,
-          reviewType: "service_plan",
-          comment: "Supervisor review requested for new Service Plan.",
-          actionRequired: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-      }
+      const savedDoc = completeDemoGeneratedDocumentWorkflow({
+        client,
+        actor,
+        documentType: "service_plan",
+        title: `Service Plan - ${client.displayName}`,
+        generatedText,
+        sourceAnswers: answers,
+        relatedWorkstreamType: "other", // Service plan is broad
+        checklistUpdates: { servicePlanCompleted: true },
+        reviewDate: answers.reviewDate,
+        createTask: taskData.length > 0,
+        taskData: taskData as any,
+        createReferral: referralData.length > 0,
+        referralData: referralData as any,
+        supervisorReviewRequested: answers.requestSupervisorReview === "yes"
+      });
+
+      setSavedDocId(savedDoc.id);
 
       window.localStorage.removeItem(storageKey);
       toast.success("Service Plan saved to client file");

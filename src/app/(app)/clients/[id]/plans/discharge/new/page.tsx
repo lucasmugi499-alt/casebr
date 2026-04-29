@@ -11,14 +11,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/contexts/AuthContext";
 import { getDemoActor } from "@/lib/demo/demoMode";
 import { 
-  addDemoTimelineItem, 
-  addDemoTask, 
-  upsertDemoGeneratedDocument,
-  updateDemoDocumentationChecklist,
-  updateDemoClient,
-  updateDemoClientNeed,
-  addDemoAuditLog
-} from "@/lib/demo/demoStore";
+  completeDemoGeneratedDocumentWorkflow,
+  copyDemoDocumentToSmis
+} from "@/lib/demo/generatedDocumentWorkflow";
 import { clientsService } from "@/lib/services/clientsService";
 import { generateDischargePlanText, DischargePlanAnswers } from "@/lib/casework/dischargePlanGenerator";
 import { Client, GeneratedDocument, ClientStatus } from "@/types";
@@ -75,6 +70,7 @@ export default function NewDischargePlanPage() {
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [finalStatus, setFinalStatus] = useState<ClientStatus | "">("");
+  const [savedDocId, setSavedDocId] = useState<string | null>(null);
 
   const storageKey = useMemo(() => `discharge_plan_draft_${id}`, [id]);
 
@@ -132,109 +128,59 @@ export default function NewDischargePlanPage() {
   const prevStep = () => setCurrentStep(prev => Math.max(prev - 1, 0));
 
   const handleFinish = async () => {
-    if (!client || !user) return;
+    const actor = getDemoActor();
+    if (!actor || !client) return;
     setSaving(true);
 
     try {
-      // 1. Create Generated Document
-      const doc: GeneratedDocument = {
-        id: `discharge_${Date.now()}`,
-        clientId: client.id,
-        organizationId: client.organizationId,
-        siteId: client.siteId,
-        type: "discharge_transition_plan",
-        title: "Discharge / Transition Plan",
-        status: "completed",
-        generatedText,
-        sourceAnswers: answers as any,
-        createdById: user.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      upsertDemoGeneratedDocument(doc);
-
-      // 2. Update Checklist
-      updateDemoDocumentationChecklist(client.id, {
-        dischargeTransitionPlanDocumented: true
-      });
-
-      // 3. Update Need status
-      updateDemoClientNeed(client.id, "discharge_transition_planning", {
-        status: "completed",
-        recommendedNextAction: "Transition complete. Monitor follow-up if active."
-      });
-
-      // 4. Update Client Status if selected
-      if (finalStatus) {
-        updateDemoClient(client.id, { status: finalStatus });
-        addDemoTimelineItem({
-          id: `status_update_${Date.now()}`,
-          type: "status_change",
-          date: new Date().toISOString(),
-          title: "Status Updated",
-          summary: `Client status updated to ${finalStatus.replace('_', ' ')} upon discharge planning completion.`,
-          staffId: user.id,
-          entityId: client.id,
-          entityType: "client",
-          status: "completed"
-        });
-      }
-
-      // 5. Create Tasks from Action Plan if selected
-      if (answers.actions && answers.actions.length > 0) {
-        answers.actions.forEach(a => {
-          addDemoTask({
-            organizationId: client.organizationId,
-            siteId: client.siteId,
-            clientId: client.id,
-            assignedToId: user.id,
-            createdById: user.id,
+      const taskData = (answers.actions && answers.actions.length > 0)
+        ? answers.actions.map(a => ({
             title: `[Transition] ${a.action}`,
             description: `Follow-up required: ${a.action}. Responsible: ${a.responsible}.`,
             dueDate: a.dueDate || new Date().toISOString(),
-            priority: "medium",
-            status: "open"
-          });
-        });
-      }
+            priority: "medium" as const
+          }))
+        : [];
 
-      // 6. Timeline & Audit
-      addDemoTimelineItem({
-        id: `discharge_plan_${Date.now()}`,
-        type: "housing_plan", // Reusing housing_plan type for styling or adding new
-        date: new Date().toISOString(),
-        title: "Discharge / Transition Plan Completed",
-        summary: `Reason: ${answers.reason}. Destination: ${answers.destination}.`,
-        staffId: user.id,
-        entityId: doc.id,
-        entityType: "generated_document",
-        status: "completed"
+      const savedDoc = completeDemoGeneratedDocumentWorkflow({
+        client,
+        actor,
+        documentType: "discharge_transition_plan",
+        title: "Discharge / Transition Plan",
+        generatedText,
+        sourceAnswers: answers,
+        relatedWorkstreamType: "housing", // Usually related to housing outcome
+        checklistUpdates: {
+          dischargeTransitionPlanDocumented: true
+        },
+        statusUpdate: finalStatus || undefined,
+        createTask: taskData.length > 0,
+        taskData: taskData
       });
 
-      addDemoAuditLog({
-        organizationId: client.organizationId,
-        userId: user.id,
-        action: "create_discharge_plan",
-        entityType: "generated_document",
-        entityId: doc.id,
-        metadata: { clientId: client.id }
-      });
+      setSavedDocId(savedDoc.id);
 
       window.localStorage.removeItem(storageKey);
       toast.success("Discharge / Transition Plan saved to client file.");
       router.push(`/clients/${client.id}?tab=plans`);
     } catch (error) {
+      console.error(error);
       toast.error("Failed to save plan.");
     } finally {
       setSaving(false);
     }
   };
 
-  const copyToClipboard = () => {
+  const copyToClipboardForSmis = () => {
     navigator.clipboard.writeText(generatedText);
     setCopied(true);
     toast.success("Copied to clipboard for SMIS.");
+    
+    const actor = getDemoActor();
+    if (actor && client && savedDocId) {
+      copyDemoDocumentToSmis(client.id, savedDocId, actor);
+    }
+    
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -585,7 +531,7 @@ export default function NewDischargePlanPage() {
                               <Label>Responsible Person</Label>
                               <Select 
                                 value={action.responsible} 
-                                onValueChange={v => updateAction(idx, "responsible", v)}
+                                onValueChange={v => updateAction(idx, "responsible", v as string)}
                               >
                                 <SelectTrigger>
                                   <SelectValue />
@@ -653,7 +599,7 @@ export default function NewDischargePlanPage() {
                         <Label>Recommended Client Status</Label>
                         <Select 
                           value={finalStatus} 
-                          onValueChange={(v: ClientStatus) => setFinalStatus(v)}
+                          onValueChange={(v) => setFinalStatus(v as ClientStatus)}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Choose status..." />
@@ -687,7 +633,7 @@ export default function NewDischargePlanPage() {
                         <CheckCircle className="h-5 w-5" />
                         Plan Generated Successfully
                       </div>
-                      <Button variant="outline" size="sm" onClick={copyToClipboard}>
+                      <Button variant="outline" size="sm" onClick={copyToClipboardForSmis}>
                         {copied ? <CheckCircle className="h-4 w-4 mr-2" /> : <ClipboardCopy className="h-4 w-4 mr-2" />}
                         {copied ? "Copied" : "Copy for SMIS"}
                       </Button>

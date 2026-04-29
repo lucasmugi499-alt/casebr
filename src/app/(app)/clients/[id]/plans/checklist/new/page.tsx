@@ -9,11 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import { getDemoActor } from "@/lib/demo/demoMode";
 import { 
-  updateDemoDocumentChecklist,
-  updateDemoDocumentationChecklist,
-  addDemoTimelineItem,
-  addDemoAuditLog
+  completeDemoGeneratedDocumentWorkflow,
+  copyDemoDocumentToSmis
+} from "@/lib/demo/generatedDocumentWorkflow";
+import { 
+  updateDemoDocumentChecklist as updateStoreChecklist
 } from "@/lib/demo/demoStore";
+import { generateDocumentChecklistText } from "@/lib/casework/documentChecklistGenerator";
 import { 
   getDemoDocumentChecklistForClient,
   getDemoClientById 
@@ -26,7 +28,8 @@ import {
   Clock,
   Save,
   LayoutDashboard,
-  FileText
+  FileText,
+  ClipboardCopy
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -52,6 +55,9 @@ export default function DocumentChecklistPage() {
   const [client, setClient] = useState<Client | null>(null);
   const [checklist, setChecklist] = useState<DocumentChecklist | null>(null);
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [savedDocId, setSavedDocId] = useState<string | null>(null);
+  const [generatedText, setGeneratedText] = useState("");
 
   useEffect(() => {
     if (!user || !id) return;
@@ -75,52 +81,58 @@ export default function DocumentChecklistPage() {
   };
 
   const handleSave = () => {
-    if (!checklist || !client) return;
+    const actor = getDemoActor();
+    if (!checklist || !client || !actor) return;
     setSaving(true);
     try {
-      // 1. Save to store
-      updateDemoDocumentChecklist(client.id, checklist);
+      // 1. Save the raw checklist data
+      updateStoreChecklist(client.id, checklist);
 
-      // 2. Update documentation summary checklist
-      const allComplete = DOCUMENT_TYPES.every(doc => (checklist as any)[doc.id] === 'complete');
+      // 2. Generate the text for the GeneratedDocument
+      const text = generateDocumentChecklistText(client, checklist);
+      setGeneratedText(text);
+
+      // 3. Use the standardized workflow helper
       const hasSomeId = checklist.governmentId === 'complete' || checklist.healthCard === 'complete' || checklist.sin === 'complete';
       const hasIncome = checklist.proofOfIncome === 'complete' || checklist.noticeOfAssessment === 'complete';
 
-      updateDemoDocumentationChecklist(client.id, {
-        idStatusDocumented: hasSomeId,
-        incomeStatusDocumented: hasIncome,
-        updatedAt: new Date().toISOString()
+      const savedDoc = completeDemoGeneratedDocumentWorkflow({
+        client,
+        actor,
+        documentType: "document_checklist",
+        title: `Document Checklist - ${client.displayName}`,
+        generatedText: text,
+        sourceAnswers: checklist,
+        relatedWorkstreamType: "other",
+        checklistUpdates: {
+          idStatusDocumented: hasSomeId,
+          incomeStatusDocumented: hasIncome,
+        }
       });
 
-      // 3. Add timeline item
-      addDemoTimelineItem({
-        id: `tl_docs_${Date.now()}`,
-        clientId: client.id,
-        type: "document_checklist",
-        date: new Date().toISOString(),
-        title: "Document Checklist Updated",
-        summary: `Document status updated for ${client.displayName}.`,
-        staffId: user?.id || "",
-        entityId: client.id,
-        entityType: "client",
-        status: "completed"
-      });
-
-      // 4. Audit Log
-      addDemoAuditLog({
-        organizationId: client.organizationId,
-        userId: user?.id || "",
-        action: "update_documents",
-        entityType: "client",
-        entityId: client.id,
-        metadata: { checklist }
-      });
+      setSavedDocId(savedDoc.id);
 
       toast.success("Document checklist saved.");
-      router.push(`/clients/${client.id}?tab=plans`);
+      // We don't redirect immediately to allow Copy for SMIS
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to save checklist.");
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(generatedText);
+    setCopied(true);
+    toast.success("Copied to clipboard for SMIS");
+    
+    const actor = getDemoActor();
+    if (actor && client && savedDocId) {
+      copyDemoDocumentToSmis(client.id, savedDocId, actor);
+    }
+    
+    setTimeout(() => setCopied(false), 2000);
   };
 
   if (!client || !checklist) return <div className="p-8 text-center">Loading checklist...</div>;
@@ -150,9 +162,16 @@ export default function DocumentChecklistPage() {
               <p className="text-muted-foreground text-sm">Client: {client.displayName}</p>
             </div>
           </div>
-          <Button onClick={handleSave} disabled={saving}>
-            <Save className="h-4 w-4 mr-2" /> {saving ? "Saving..." : "Save Changes"}
-          </Button>
+          <div className="flex gap-2">
+            {savedDocId && (
+              <Button variant="outline" onClick={handleCopy}>
+                <ClipboardCopy className="h-4 w-4 mr-2" /> {copied ? "Copied!" : "Copy for SMIS"}
+              </Button>
+            )}
+            <Button onClick={handleSave} disabled={saving}>
+              <Save className="h-4 w-4 mr-2" /> {saving ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

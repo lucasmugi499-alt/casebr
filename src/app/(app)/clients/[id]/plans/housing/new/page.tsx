@@ -10,12 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import { getDemoActor } from "@/lib/demo/demoMode";
 import { 
-  addDemoTimelineItem, 
-  addDemoTask, 
-  upsertDemoGeneratedDocument,
-  updateDemoDocumentationChecklist,
-  updateDemoWorkstream
-} from "@/lib/demo/demoStore";
+  completeDemoGeneratedDocumentWorkflow,
+  copyDemoDocumentToSmis
+} from "@/lib/demo/generatedDocumentWorkflow";
 import { clientsService } from "@/lib/services/clientsService";
 import { generateHousingPlanText, HousingPlanAnswers } from "@/lib/casework/housingPlanGenerator";
 import { Client, GeneratedDocument } from "@/types";
@@ -62,6 +59,7 @@ export default function NewHousingPlanPage() {
   const [generatedText, setGeneratedText] = useState("");
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [savedDocId, setSavedDocId] = useState<string | null>(null);
 
   const storageKey = useMemo(() => `housing_plan_draft_${id}`, [id]);
 
@@ -103,6 +101,13 @@ export default function NewHousingPlanPage() {
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedText);
     setCopied(true);
+    toast.success("Copied to clipboard for SMIS");
+    
+    const actor = getDemoActor();
+    if (actor && client && savedDocId) {
+      copyDemoDocumentToSmis(client.id, savedDocId, actor);
+    }
+    
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -112,72 +117,34 @@ export default function NewHousingPlanPage() {
 
     setSaving(true);
     try {
-      const docId = `doc_housing_${Date.now()}`;
-      const document: GeneratedDocument = {
-        id: docId,
-        clientId: client.id,
-        organizationId: actor.organizationId,
-        siteId: client.siteId,
-        type: "housing_plan",
+      const savedDoc = completeDemoGeneratedDocumentWorkflow({
+        client,
+        actor,
+        documentType: "housing_plan",
         title: `Housing Plan - ${client.displayName}`,
-        status: "completed",
         generatedText,
-        sourceAnswers: answers as any,
-        createdById: actor.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      // 1. Save document
-      upsertDemoGeneratedDocument(document);
-
-      // 2. Update documentation checklist
-      updateDemoDocumentationChecklist(client.id, { housingPlanStarted: true });
-
-      // 3. Update housing workstream
-      updateDemoWorkstream(client.id, "housing", {
-        status: "in_progress",
-        latestAction: "Housing Plan completed.",
-        nextAction: answers.nextAction || "Follow up on action plan steps."
-      });
-
-      // 4. Add timeline item
-      addDemoTimelineItem({
-        id: `tl_${Date.now()}`,
-        type: "housing_plan",
-        date: new Date().toISOString(),
-        title: "Housing Plan completed",
-        summary: "SMIS-ready housing plan generated and saved to client file.",
-        staffId: actor.id,
-        entityId: docId,
-        entityType: "generatedDocument",
-        relatedWorkstream: "housing",
-        status: "completed"
-      });
-
-      // 5. Create follow-up task if requested
-      if (answers.createTask === "yes" && answers.nextAction) {
-        addDemoTask({
-          id: `task_${Date.now()}`,
-          organizationId: actor.organizationId,
-          siteId: client.siteId,
-          clientId: client.id,
-          assignedToId: actor.id,
-          createdById: actor.id,
-          title: answers.nextAction,
+        sourceAnswers: answers,
+        relatedWorkstreamType: "housing",
+        checklistUpdates: { housingPlanStarted: true },
+        createTask: answers.createTask === "yes",
+        taskData: {
+          title: answers.nextAction || "Housing Plan Follow-up",
           description: "Follow-up from housing plan completion.",
           dueDate: answers.dueDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          priority: "high",
-          status: "open",
-        });
-      }
+          priority: "high"
+        }
+      });
 
-      // 6. Clear draft
+      setSavedDocId(savedDoc.id);
+
+      // Clear draft
       window.localStorage.removeItem(storageKey);
 
-      // 7. Success!
       toast.success("Housing Plan saved to client file");
       router.push(`/clients/${client.id}?tab=plans&success=housing_plan_saved`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to save Housing Plan");
     } finally {
       setSaving(false);
     }

@@ -183,7 +183,7 @@ export default function CreateUserPage() {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label>Role</Label>
-                    <Select value={role} onValueChange={(v: Role) => setRole(v)}>
+                    <Select value={role} onValueChange={(v: any) => setRole(v as Role)}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
