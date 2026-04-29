@@ -165,7 +165,7 @@ export const generateHousingPlanText = (
   const today = new Date().toLocaleDateString("en-CA");
   const barriers = Array.isArray(answers.barriers)
     ? answers.barriers.map((b) => barrierLabel[b] ?? b).join(", ")
-    : safe(answers.barriers as string);
+    : safe(answers.barriers);
   const housing = housingTypeLabel[answers.housingType ?? ""] ?? safe(answers.housingType);
   const responsible = responsibleLabel[answers.responsible ?? ""] ?? safe(answers.responsible);
 

@@ -133,7 +133,7 @@ export default function SupervisorCommandCentrePage({ initialTab }: { initialTab
         </div>
 
         {/* MAIN TABS */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value ?? "overview")} className="space-y-4">
           <TabsList className="bg-muted/50 p-1">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="assignments" className="relative">

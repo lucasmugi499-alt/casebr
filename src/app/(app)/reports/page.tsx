@@ -8,8 +8,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { getDemoActor } from "@/lib/demo/demoMode";
 import { getDemoManagementDashboard } from "@/lib/demo/demoServices";
+import { cn } from "@/lib/utils";
 import { addDemoAuditLog } from "@/lib/demo/demoStore";
+import { AlertTriangle, Download, FileCheck, FileText, Home, PieChart, Users } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
+import { toast } from "sonner";
 
 export default function ReportsPage() {
   const { user } = useAuth();

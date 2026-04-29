@@ -182,7 +182,7 @@ export default function SetupPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="siteType">Site Type</Label>
-                  <Select value={siteType} onValueChange={setSiteType}>
+                  <Select value={siteType} onValueChange={(value) => setSiteType(value ?? "shelter")}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>

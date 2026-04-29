@@ -235,7 +235,7 @@ export default function NewCaseNotePage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Client</Label>
-                    <Select value={selectedClientId} onValueChange={setSelectedClientId} disabled={!!initialClientId}>
+                    <Select value={selectedClientId} onValueChange={(value) => setSelectedClientId(value ?? "")} disabled={!!initialClientId}>
                       <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
                       <SelectContent>
                         {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.displayName}</SelectItem>)}
