@@ -38,7 +38,7 @@ export default function OrganizationSettingsPage() {
     setLoading(false);
   }, []);
 
-  const handleUpdate = (path: string, value: string | number | boolean) => {
+  const handleUpdate = (path: string, value: any) => {
     if (!org) return;
     
     // Simple path updater for organization settings

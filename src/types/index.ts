@@ -7,7 +7,7 @@ export interface OrganizationSettings {
   allowVoiceNotes: boolean;
   dataRetentionMonths: number;
   requireSupervisorReviewForHighRisk: boolean;
-  clientIdentifierMode: 'client_code' | 'display_name';
+  clientIdentifierMode: 'client_code' | 'initials' | 'display_name' | 'legal_name';
 }
 
 export interface Organization {
@@ -503,4 +503,130 @@ export interface SupervisorOperationalBoard {
   documentationGaps: DocumentationGapItem[];
   recentActivity: RecentActivityItem[];
   caseworkers: User[];
+}
+
+// ─── Orchestration Types ────────────────────────────────────────────────────
+
+export type RequiredPlanStatus = 'missing' | 'draft' | 'completed' | 'review_due' | 'not_applicable';
+
+export interface RequiredPlan {
+  type: GeneratedDocumentType;
+  label: string;
+  status: RequiredPlanStatus;
+  reasonRequired: string;
+  relatedNeedType?: ClientNeedType;
+  priority: Priority;
+  actionLabel: string;
+  actionUrl: string;
+  relatedDocumentId?: string;
+}
+
+export type HousingReadinessLevel = 'not_ready' | 'getting_ready' | 'mostly_ready' | 'housing_ready';
+
+export interface HousingReadiness {
+  score: number;
+  level: HousingReadinessLevel;
+  completedItems: string[];
+  missingItems: string[];
+  blockers: string[];
+  recommendedNextActions: string[];
+}
+
+export interface DocumentationStatusItem {
+  key: string;
+  label: string;
+  status: 'missing' | 'draft' | 'completed' | 'review_due' | 'not_applicable';
+  relatedDocumentId?: string;
+  actionLabel: string;
+  actionUrl: string;
+  required: boolean;
+}
+
+export interface DocumentationStatus {
+  overallCompletionPercent: number;
+  items: DocumentationStatusItem[];
+}
+
+export interface SmartTaskRecommendation {
+  id: string;
+  clientId: string;
+  title: string;
+  reason: string;
+  priority: Priority;
+  dueDate: string;
+  relatedNeedType?: ClientNeedType;
+  relatedWorkstreamType?: WorkstreamType;
+  relatedDocumentType?: GeneratedDocumentType;
+  suggestedAssigneeId?: string;
+  source: string;
+  canDismiss: boolean;
+  canAccept: boolean;
+}
+
+export interface CaseworkerNudge {
+  id: string;
+  clientId: string;
+  clientName: string;
+  message: string;
+  priority: Priority;
+  actionLabel: string;
+  actionUrl: string;
+  source: 'smart_task' | 'missing_plan' | 'stale_contact' | 'overdue_referral' | 'safety_review';
+}
+
+export interface SSANudge {
+  type: 'unassigned_clients' | 'overdue_tasks' | 'missing_plans' | 'safety_review_due' | 'documentation_gaps' | 'workload_imbalance';
+  message: string;
+  priority: Priority;
+  count: number;
+  actionLabel?: string;
+  actionUrl?: string;
+  relatedWorkerIds?: string[];
+  relatedClientIds?: string[];
+}
+
+export interface ManagerNudge {
+  type: 'documentation_gap' | 'low_plan_completion' | 'high_pending_referrals' | 'overdue_followups' | 'workload_imbalance' | 'safety_reviews_due';
+  message: string;
+  priority: Priority;
+  count: number;
+  siteId?: string;
+  siteName?: string;
+}
+
+export interface ClientCaseworkState {
+  client: Client;
+  notes: CaseNote[];
+  tasks: Task[];
+  referrals: Referral[];
+  riskFlags: RiskFlag[];
+  safetyPlans: SafetyPlan[];
+  generatedDocuments: GeneratedDocument[];
+  clientNeeds: ClientNeed[];
+  activeNeeds: ClientNeed[];
+  workstreams: Workstream[];
+  documentationChecklist: DocumentationChecklist | null;
+  documentChecklist: DocumentChecklist | null;
+  supervisorReviews: SupervisorReview[];
+  requiredPlans: RequiredPlan[];
+  completedPlans: RequiredPlan[];
+  missingPlans: RequiredPlan[];
+  documentationStatus: DocumentationStatus;
+  housingReadiness: HousingReadiness;
+  smartTasks: SmartTaskRecommendation[];
+  nextBestActions: string[];
+  ssaNudges: CaseworkerNudge[];
+  managerFlags: { type: string; count: number }[];
+  timelineHighlights: TimelineItem[];
+  priorityLevel: Priority;
+  summary: string;
+}
+
+export interface AppliedAssessmentResult {
+  createdNeeds: ClientNeed[];
+  createdWorkstreams: Workstream[];
+  recommendedPlans: RequiredPlan[];
+  smartTaskRecommendations: SmartTaskRecommendation[];
+  timelineItem: TimelineItem;
+  auditLog: AuditLog;
 }

@@ -8,22 +8,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
-  getDemoDocumentChecklistForClient, 
-  getDemoDocumentationChecklistForClient, 
-  getDemoGeneratedDocumentsForClient, 
-  getDemoNeedsForClient, 
-  getDemoTimelineForClient, 
-  getDemoWorkstreamsForClient,
-  getDemoClientById,
-  getDemoNotesForClient,
-  getDemoTasksForClient,
-  getDemoReferralsForClient,
-  getDemoRiskFlagsForClient,
-  getDemoSafetyPlansForClient
+  getDemoClientFullData,
+  getDemoSupervisorReviewsForClient
 } from "@/lib/demo/demoServices";
 import { isDemoMode } from "@/lib/demo/demoMode";
 import { updateDemoDocumentationChecklist } from "@/lib/demo/demoStore";
-import { CaseNote, Client, ClientNeed, DocumentChecklist, DocumentationChecklist, GeneratedDocument, Referral, RiskFlag, SafetyPlan, Task, TimelineItem, Workstream } from "@/types";
+import { buildClientCaseworkState } from "@/lib/casework/orchestration/caseworkOrchestrator";
+import { 
+  CaseNote, 
+  Client, 
+  ClientNeed, 
+  DocumentChecklist, 
+  DocumentationChecklist, 
+  GeneratedDocument, 
+  Referral, 
+  RiskFlag, 
+  SafetyPlan, 
+  Task, 
+  TimelineItem, 
+  Workstream,
+  ClientCaseworkState,
+  RequiredPlan
+} from "@/types";
 import { 
   AlertTriangle, 
   ClipboardCheck, 
@@ -60,19 +66,33 @@ export default function ClientProfilePage() {
   const successParam = searchParams.get("success");
 
   const [client, setClient] = useState<Client | null>(null);
-  const [notes, setNotes] = useState<CaseNote[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [referrals, setReferrals] = useState<Referral[]>([]);
-  const [riskFlags, setRiskFlags] = useState<RiskFlag[]>([]);
-  const [safetyPlans, setSafetyPlans] = useState<SafetyPlan[]>([]);
-  const [workstreams, setWorkstreams] = useState<Workstream[]>([]);
-  const [needs, setNeeds] = useState<ClientNeed[]>([]);
-  const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
-  const [documentationChecklist, setDocumentationChecklist] = useState<DocumentationChecklist | null>(null);
-  const [documentChecklist, setDocumentChecklist] = useState<DocumentChecklist | null>(null);
-  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [caseworkState, setCaseworkState] = useState<ClientCaseworkState | null>(null);
   const [loading, setLoading] = useState(true);
   const [nowMs] = useState(() => Date.now());
+
+  // Derived state from caseworkState for compatibility with existing tab UI
+  const notes = caseworkState?.notes || [];
+  const tasks = caseworkState?.tasks || [];
+  const referrals = caseworkState?.referrals || [];
+  const riskFlags = caseworkState?.riskFlags || [];
+  const safetyPlans = caseworkState?.safetyPlans || [];
+  const workstreams = caseworkState?.workstreams || [];
+  const needs = caseworkState?.clientNeeds || [];
+  const documents = caseworkState?.generatedDocuments || [];
+  const documentationChecklist = caseworkState?.documentationChecklist || null;
+  const documentChecklist = caseworkState?.documentChecklist || null;
+  const timeline = caseworkState?.timelineHighlights || [];
+
+  const safetyPlan = caseworkState?.safetyPlans[0];
+  const hasSafetyPlan = !!safetyPlan;
+  const isSafetyReviewDue = caseworkState?.requiredPlans.some(p => p.type === "safety_plan" && p.status === "review_due");
+
+  const servicePlan = caseworkState?.requiredPlans.find(p => p.type === "service_plan");
+  const hasServicePlan = servicePlan?.status === "completed" || servicePlan?.status === "review_due";
+  const isServiceReviewDue = servicePlan?.status === "review_due";
+
+  const dischargePlan = caseworkState?.requiredPlans.find(p => p.type === "discharge_plan");
+  const hasDischargePlan = dischargePlan?.status === "completed" || dischargePlan?.status === "review_due";
 
   useEffect(() => {
     if (!user || !id) return;
@@ -90,20 +110,14 @@ export default function ClientProfilePage() {
       setLoading(true);
       try {
         if (isDemoMode()) {
-          const c = getDemoClientById(id, actor);
-          setClient(c);
-          if (c) {
-            setWorkstreams(getDemoWorkstreamsForClient(id));
-            setNeeds(getDemoNeedsForClient(id));
-            setDocuments(getDemoGeneratedDocumentsForClient(id));
-            setDocumentationChecklist(getDemoDocumentationChecklistForClient(id));
-            setDocumentChecklist(getDemoDocumentChecklistForClient(id));
-            setTimeline(getDemoTimelineForClient(id));
-            setNotes(getDemoNotesForClient(id));
-            setTasks(getDemoTasksForClient(id));
-            setReferrals(getDemoReferralsForClient(id));
-            setRiskFlags(getDemoRiskFlagsForClient(id));
-            setSafetyPlans(getDemoSafetyPlansForClient(id));
+          const fullData = getDemoClientFullData(id);
+          if (fullData) {
+            const state = buildClientCaseworkState({
+              ...fullData,
+              supervisorReviews: getDemoSupervisorReviewsForClient(id)
+            });
+            setClient(state.client);
+            setCaseworkState(state);
           }
         }
       } finally {
@@ -167,53 +181,16 @@ export default function ClientProfilePage() {
     }
   };
 
-  const nextBestActions: { text: string; action?: string; link?: string }[] = [];
-  const housingNeed = needs.find(n => n.needType === "housing_support");
-  const safetyNeed = needs.find(n => n.needType === "safety_planning");
-  const serviceNeed = needs.find(n => n.needType === "service_planning");
-  const hasHousingPlan = documents.some(d => d.type === "housing_plan");
-  const hasSafetyPlan = documents.some(d => d.type === "safety_plan");
-  const hasServicePlan = documents.some(d => d.type === "service_plan");
-  const safetyPlan = documents.find(d => d.type === "safety_plan");
-  const servicePlan = documents.find(d => d.type === "service_plan");
-  const isSafetyReviewDue = safetyPlan && (safetyPlan.status === "review_due" || (safetyPlan.reviewDate && new Date(safetyPlan.reviewDate) < new Date()));
-  const isServiceReviewDue = servicePlan && (servicePlan.status === "review_due" || (servicePlan.reviewDate && new Date(servicePlan.reviewDate) < new Date()));
-  
-  if (housingNeed && !hasHousingPlan) {
-    nextBestActions.push({
-      text: "Complete Housing Plan because housing need is high priority and no completed plan exists.",
-      action: "Start Housing Plan",
-      link: `/clients/${client.id}/plans/housing/new`
-    });
-  }
-
-  if (safetyNeed && (!hasSafetyPlan || isSafetyReviewDue)) {
-    nextBestActions.push({
-      text: isSafetyReviewDue ? "Review safety plan because review date has passed." : "Complete Safety Plan because safety planning is identified as a need.",
-      action: isSafetyReviewDue ? "Review Safety Plan" : "Start Safety Plan",
-      link: `/clients/${client.id}/plans/safety/new`
-    });
-  }
-
-  const dischargeNeed = needs.find(n => n.needType === "discharge_transition_planning");
-  const dischargePlan = documents.find(d => d.type === "discharge_transition_plan");
-  const hasDischargePlan = !!dischargePlan;
-
-  if (dischargeNeed && !hasDischargePlan) {
-    nextBestActions.push({
-      text: "Complete Discharge / Transition Plan to prepare for client transition.",
-      action: "Start Discharge Plan",
-      link: `/clients/${client.id}/plans/discharge/new`
-    });
-  }
-
-  if (!client.lastContactAt || new Date(client.lastContactAt).getTime() < nowMs - 7 * 24 * 60 * 60 * 1000) {
-    nextBestActions.push({
-      text: "Add case note because no contact has been documented in 7 days.",
-      action: "Add Note",
-      link: `/clients/${client.id}/notes/new`
-    });
-  }
+  const smartTasks = caseworkState?.smartTasks || [];
+  const nextBestActions = smartTasks.map(task => {
+    // Map smart task to UI format
+    const plan = caseworkState?.requiredPlans.find(p => p.type === task.relatedDocumentType);
+    return {
+      text: task.reason,
+      action: task.title,
+      link: plan?.actionUrl || `/clients/${id}`
+    };
+  });
 
   return (
     <AuthGuard allowedRoles={["caseworker", "ssa", "manager", "admin"]}>
@@ -301,153 +278,199 @@ export default function ClientProfilePage() {
           <TabsContent value="overview" className="space-y-6 pt-4">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
-                {/* CLIENT NEEDS */}
-                <section className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold flex items-center gap-2">
-                      <Target className="h-5 w-5 text-primary" /> Client Needs
-                    </h3>
-                  </div>
+                
+                {/* INTELLIGENCE CARDS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* HOUSING READINESS */}
+                  <Card className="overflow-hidden border-t-4 border-t-primary">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-bold flex items-center justify-between">
+                        Housing Readiness
+                        <Badge variant="outline" className="text-[10px] uppercase">
+                          {caseworkState?.housingReadiness.level.replace("_", " ")}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-end justify-between">
+                        <div className="text-4xl font-black text-primary">{caseworkState?.housingReadiness.score}%</div>
+                        <div className="text-xs text-muted-foreground text-right">
+                          {caseworkState?.housingReadiness.completedItems.length} of { (caseworkState?.housingReadiness.completedItems.length || 0) + (caseworkState?.housingReadiness.missingItems.length || 0) } checks passed
+                        </div>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-2">
+                        <div 
+                          className="bg-primary h-2 rounded-full transition-all" 
+                          style={{ width: `${caseworkState?.housingReadiness.score}%` }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground">Top Blockers</p>
+                        <div className="space-y-1">
+                          {caseworkState?.housingReadiness.blockers.map((blocker, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs text-foreground/80">
+                              <AlertCircle className="h-3 w-3 text-amber-500" />
+                              {blocker}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* DOCUMENTATION STATUS */}
+                  <Card className="overflow-hidden border-t-4 border-t-blue-500">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-bold flex items-center justify-between">
+                        Documentation Status
+                        <Badge variant="outline" className="text-[10px] uppercase">
+                          {caseworkState?.documentationStatus.overallCompletionPercent}% Complete
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                       <div className="space-y-3">
+                          {caseworkState?.documentationStatus.items.filter(i => i.required).slice(0, 4).map((item) => (
+                            <div key={item.key} className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">{item.label}</span>
+                              <div className="flex items-center gap-2">
+                                {item.status === "completed" ? (
+                                  <CheckCircle2 className="h-3 w-3 text-green-500" />
+                                ) : (
+                                  <div className="h-3 w-3 rounded-full border-2 border-muted" />
+                                )}
+                                <span className={cn(
+                                  "font-medium",
+                                  item.status === "completed" ? "text-green-600" : "text-amber-600"
+                                )}>
+                                  {item.status.replace("_", " ")}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                       </div>
+                       <Button variant="ghost" size="sm" className="w-full h-8 text-[10px] uppercase font-bold" onClick={() => handleTabChange("plans")}>
+                         View All Documentation
+                       </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* ACTIVE NEEDS & WORKSTREAMS */}
+                <section className="space-y-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Target className="h-5 w-5 text-primary" /> Active Casework Focus
+                  </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {needs.length > 0 ? needs.map((need) => {
-                      const isHousing = need.needType === "housing_support";
-                      const doc = documents.find(d => need.relatedDocumentTypes.includes(d.type));
+                    {needs.filter(n => n.status === "in_progress" || n.status === "identified").map((need) => {
+                      const ws = workstreams.find(w => w.type === need.needType || (need.needType === "housing_support" && w.type === "housing"));
                       return (
-                        <Card key={need.id} className="overflow-hidden border-l-4 border-l-primary">
+                        <Card key={need.id} className="bg-card border-l-4 border-l-primary shadow-sm hover:shadow-md transition-shadow">
                           <CardContent className="p-4 space-y-3">
                             <div className="flex items-start justify-between">
                               <div className="space-y-1">
                                 <p className="font-bold capitalize">{need.needType.replace("_", " ")}</p>
                                 <div className="flex gap-2">
-                                  <Badge variant="outline" className="text-[10px] uppercase">{need.priority}</Badge>
-                                  <Badge variant="secondary" className="text-[10px] uppercase">{need.status.replace("_", " ")}</Badge>
+                                  <Badge variant="secondary" className="text-[10px] uppercase">{need.priority}</Badge>
+                                  {ws && <Badge variant="outline" className="text-[10px] uppercase border-primary/20 text-primary">{ws.status.replace("_", " ")}</Badge>}
                                 </div>
                               </div>
                             </div>
-                            <div className="text-sm space-y-1">
-                              <p className="text-muted-foreground">Next Action:</p>
-                              <p className="font-medium">{need.recommendedNextAction}</p>
+                            
+                            <div className="text-xs space-y-1">
+                              <p className="text-muted-foreground">Next Best Action:</p>
+                              <p className="font-medium text-foreground">{ws?.nextAction || need.recommendedNextAction}</p>
                             </div>
-                            <div className="pt-2 flex items-center justify-between border-t">
-                              <span className="text-xs text-muted-foreground flex flex-col">
-                                <span>{doc ? `${doc.type.replace("_", " ")}: ${doc.status.replace("_", " ")}` : "Plan: Not Started"}</span>
-                                {doc?.reviewDate && <span className="text-[10px]">Review: {new Date(doc.reviewDate).toLocaleDateString()}</span>}
-                              </span>
-                              <Link 
-                                href={
-                                  isHousing ? `/clients/${client.id}/plans/housing/new` : 
-                                  (need.needType === "safety_planning" ? `/clients/${client.id}/plans/safety/new` : 
-                                  (need.needType === "service_planning" ? `/clients/${client.id}/plans/service/new` : 
-                                  (need.needType === "discharge_transition_planning" ? `/clients/${client.id}/plans/discharge/new` : "#")))
-                                } 
-                                className={buttonVariants({ variant: "ghost", size: "sm", className: "h-8 px-2 text-primary" })}
-                              >
-                                {doc ? (
-                                  (isSafetyReviewDue && need.needType === "safety_planning") || 
-                                  (isServiceReviewDue && need.needType === "service_planning") ? "Update Plan" : 
-                                  (doc.status === "draft" ? "Continue Plan" : "Review Plan")
-                                ) : "Start Plan"} <ArrowRight className="ml-1 h-3 w-3" />
-                              </Link>
-                            </div>
+
+                            {ws && (
+                              <div className="pt-2 border-t text-[10px] flex justify-between items-center text-muted-foreground">
+                                <span>Latest: {ws.latestAction}</span>
+                                <Link href={`/clients/${id}?tab=actions`} className="text-primary hover:underline font-bold">Details</Link>
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
                       );
-                    }) : (
-                      <p className="text-sm text-muted-foreground col-span-2 py-4 italic">No active needs documented.</p>
+                    })}
+                    {needs.length === 0 && (
+                       <p className="text-sm text-muted-foreground py-8 text-center col-span-2 italic bg-muted/20 rounded-lg border border-dashed">
+                         No active needs identified. Complete an Intake Assessment.
+                       </p>
                     )}
-                  </div>
-                </section>
-
-                {/* WORK IN PROGRESS (Workstreams) */}
-                <section className="space-y-3">
-                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-primary" /> Work in Progress
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {workstreams.map((ws) => (
-                      <Card key={ws.id} className="bg-muted/30 border-dashed">
-                        <CardContent className="p-4 space-y-3">
-                          <div className="flex justify-between items-start">
-                            <p className="font-semibold capitalize text-sm">{ws.type.replace("_", " ")}</p>
-                            <Badge variant="outline" className="text-[10px] uppercase">{ws.status.replace("_", " ")}</Badge>
-                          </div>
-                          <div className="text-xs space-y-2">
-                            <div>
-                              <p className="text-muted-foreground mb-0.5">Latest Action:</p>
-                              <p className="line-clamp-1">{ws.latestAction}</p>
-                            </div>
-                            <div className="flex justify-between items-end">
-                              <div>
-                                <p className="text-muted-foreground mb-0.5">Next Action:</p>
-                                <p className="font-medium text-primary">{ws.nextAction}</p>
-                              </div>
-                              {ws.dueDate && (
-                                <div className="text-right">
-                                  <p className="text-muted-foreground mb-0.5">Due:</p>
-                                  <p>{new Date(ws.dueDate).toLocaleDateString()}</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
                   </div>
                 </section>
               </div>
 
               <div className="space-y-6">
                 {/* URGENT ATTENTION */}
-                <Card className="border-red-200 dark:border-red-900/50">
+                <Card className={cn(
+                  "border-t-4 shadow-sm",
+                  caseworkState?.priorityLevel === "high" ? "border-t-destructive bg-destructive/5" : 
+                  caseworkState?.priorityLevel === "medium" ? "border-t-amber-500 bg-amber-500/5" : "border-t-muted"
+                )}>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-red-600 dark:text-red-400 text-base flex items-center gap-2">
+                    <CardTitle className={cn(
+                      "text-base flex items-center gap-2",
+                      caseworkState?.priorityLevel === "high" ? "text-destructive" : 
+                      caseworkState?.priorityLevel === "medium" ? "text-amber-600" : "text-muted-foreground"
+                    )}>
                       <AlertCircle className="h-5 w-5" /> Urgent Attention
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
+                    {caseworkState?.priorityLevel === "low" && overdueTasks.length === 0 && (
+                      <p className="text-muted-foreground italic">No urgent items identified.</p>
+                    )}
                     {overdueTasks.length > 0 && (
-                      <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
+                      <div className="flex items-center gap-2 text-destructive font-medium">
                         <AlertTriangle className="h-4 w-4" />
                         <span>{overdueTasks.length} overdue follow-ups</span>
                       </div>
                     )}
                     {(!client.lastContactAt || new Date(client.lastContactAt).getTime() < nowMs - 7 * 24 * 60 * 60 * 1000) && (
-                      <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
+                      <div className="flex items-center gap-2 text-destructive font-medium">
                         <Clock className="h-4 w-4" />
                         <span>No contact in 7+ days</span>
                       </div>
                     )}
-                    {activeRisk.some(r => r.severity === "high") && (
-                      <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
-                        <AlertCircle className="h-4 w-4" />
-                        <span>High-priority risk flag active</span>
+                    {caseworkState?.riskFlags.filter(r => r.active && r.severity === "high").map(risk => (
+                      <div key={risk.id} className="flex items-center gap-2 text-destructive font-medium">
+                        <ShieldAlert className="h-4 w-4" />
+                        <span>High Risk: {risk.category.replace("_", " ")}</span>
                       </div>
-                    )}
-                    {(!documentationChecklist?.housingPlanStarted) && (
-                      <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                    ))}
+                    {caseworkState?.missingPlans.filter(p => p.priority === "high").map(plan => (
+                      <div key={plan.type} className="flex items-center gap-2 text-amber-600 font-medium">
                         <FileText className="h-4 w-4" />
-                        <span>Missing Housing Plan documentation</span>
+                        <span>Missing {plan.label}</span>
                       </div>
-                    )}
+                    ))}
                   </CardContent>
                 </Card>
 
-                {/* NEXT BEST ACTIONS */}
+                {/* SMART RECOMMENDATIONS */}
                 <section className="space-y-3">
-                  <h3 className="text-base font-semibold">Next Best Actions</h3>
+                  <h3 className="text-base font-semibold flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" /> Smart Recommendations
+                  </h3>
                   <div className="space-y-2">
                     {nextBestActions.map((action, idx) => (
-                      <div key={idx} className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-sm space-y-2">
-                        <p>{action.text}</p>
-                        {action.link && (
-                          <Link href={action.link} className="text-primary font-medium flex items-center hover:underline">
-                            {action.action} <ArrowRight className="ml-1 h-3 w-3" />
-                          </Link>
-                        )}
-                      </div>
+                      <Card key={idx} className="bg-primary/5 border border-primary/20 shadow-none hover:shadow-sm transition-all cursor-default">
+                        <CardContent className="p-3 text-sm space-y-2">
+                          <p className="font-medium text-foreground/90">{action.text}</p>
+                          {action.link && (
+                            <Link href={action.link} className="text-primary font-bold text-xs flex items-center hover:underline group">
+                              {action.action} 
+                              <ArrowRight className="ml-1 h-3 w-3 transition-transform group-hover:translate-x-1" />
+                            </Link>
+                          )}
+                        </CardContent>
+                      </Card>
                     ))}
                     {nextBestActions.length === 0 && (
-                      <p className="text-sm text-muted-foreground italic">No urgent actions suggested. Continue standard follow-up.</p>
+                      <p className="text-sm text-muted-foreground italic p-4 text-center border rounded-lg border-dashed bg-muted/10">
+                        No intelligent suggestions available.
+                      </p>
                     )}
                   </div>
                 </section>
@@ -459,16 +482,19 @@ export default function ClientProfilePage() {
                   </h3>
                   <div className="space-y-3">
                     {timeline.slice(0, 3).map((item) => (
-                      <div key={item.id} className="border-l-2 border-muted pl-4 relative space-y-1">
-                        <div className="absolute w-2 h-2 rounded-full bg-muted -left-[5px] top-1.5" />
-                        <p className="text-[10px] text-muted-foreground uppercase font-semibold">
+                      <div key={item.id} className="border-l-2 border-muted pl-4 relative space-y-1 group">
+                        <div className="absolute w-2 h-2 rounded-full bg-muted group-hover:bg-primary -left-[5px] top-1.5 transition-colors" />
+                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
                           {new Date(item.date).toLocaleDateString()} • {item.type.replace("_", " ")}
                         </p>
-                        <p className="text-sm font-medium">{item.title}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-2">{item.summary}</p>
+                        <p className="text-sm font-bold text-foreground/80">{item.title}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{item.summary}</p>
                       </div>
                     ))}
                   </div>
+                  <Button variant="ghost" size="sm" className="w-full text-xs text-primary" onClick={() => handleTabChange("timeline")}>
+                    View Full Timeline
+                  </Button>
                 </section>
               </div>
             </div>

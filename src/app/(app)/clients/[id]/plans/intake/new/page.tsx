@@ -8,24 +8,29 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { getDemoActor } from "@/lib/demo/demoMode";
-import { 
+import {
   completeDemoGeneratedDocumentWorkflow,
   copyDemoDocumentToSmis
 } from "@/lib/demo/generatedDocumentWorkflow";
 import { clientsService } from "@/lib/services/clientsService";
 import { generateIntakeAssessmentText, IntakeAssessmentAnswers } from "@/lib/casework/intakePlanGenerator";
-import { Client, GeneratedDocument } from "@/types";
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Save, 
-  CheckCircle, 
+import { applyInitialAssessmentToClientFile } from "@/lib/casework/orchestration/caseworkOrchestrator";
+import { getDemoNeedsForClient, getDemoWorkstreamsForClient } from "@/lib/demo/demoServices";
+import { addDemoClientNeed, addDemoWorkstream, addDemoTimelineItem, addDemoAuditLog } from "@/lib/demo/demoStore";
+import { Client, RequiredPlan } from "@/types";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Save,
+  CheckCircle,
   ArrowLeft,
   FileText,
   ClipboardCopy,
-  LayoutDashboard
+  ClipboardCheck,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -38,6 +43,7 @@ const STEPS = [
   { id: "identity", title: "Identity & ID", description: "Legal identity and documentation status." },
   { id: "housing", title: "Housing History", description: "Current homelessness situation and history." },
   { id: "needs", title: "Priorities", description: "Identifying immediate needs and risks." },
+  { id: "plans", title: "Recommended Plans", description: "Review and confirm casework plans." },
   { id: "finish", title: "Finalize Intake", description: "Generate and save SMIS-ready documentation." }
 ];
 
@@ -57,21 +63,26 @@ export default function NewIntakeAssessmentPage() {
   const [copied, setCopied] = useState(false);
   const [savedDocId, setSavedDocId] = useState<string | null>(null);
 
+  // Plan recommendation state
+  const [recommendedPlans, setRecommendedPlans] = useState<RequiredPlan[]>([]);
+  const [selectedPlanTypes, setSelectedPlanTypes] = useState<Set<string>>(new Set());
+  const [planNotes, setPlanNotes] = useState<Record<string, string>>({});
+
   const storageKey = useMemo(() => `intake_draft_${id}`, [id]);
 
   useEffect(() => {
     if (!user || !id) return;
-    clientsService.getClientById(id, { 
-      id: user.id, 
-      organizationId: user.organizationId, 
-      role: user.role, 
+    clientsService.getClientById(id, {
+      id: user.id,
+      organizationId: user.organizationId,
+      role: user.role,
       siteIds: user.siteIds,
       firstName: user.firstName,
       lastName: user.lastName,
     }).then(setClient);
   }, [id, user]);
 
-  const setField = (key: keyof IntakeAssessmentAnswers, value: any) => {
+  const setField = (key: keyof IntakeAssessmentAnswers, value: string | boolean | string[]) => {
     setAnswers(prev => {
       const next = { ...prev, [key]: value };
       return next;
@@ -84,16 +95,45 @@ export default function NewIntakeAssessmentPage() {
 
   const nextStep = () => {
     saveDraft();
-    if (currentStep === STEPS.length - 2) {
-      if (client && user) {
-        const text = generateIntakeAssessmentText(client, `${user.firstName} ${user.lastName}`, "Metro Shelter Main", answers);
-        setGeneratedText(text);
+
+    // When leaving "needs" step → generate recommended plans
+    if (STEPS[currentStep].id === "needs" && client && user) {
+      const actor = getDemoActor();
+      if (actor) {
+        const existingNeeds = getDemoNeedsForClient(client.id);
+        const existingWorkstreams = getDemoWorkstreamsForClient(client.id);
+        const result = applyInitialAssessmentToClientFile({
+          client,
+          intakeAnswers: answers,
+          actor,
+          existingNeeds,
+          existingWorkstreams,
+        });
+        setRecommendedPlans(result.recommendedPlans);
+        // Auto-select all recommended plans
+        setSelectedPlanTypes(new Set(result.recommendedPlans.map(p => p.type)));
       }
     }
+
+    // When leaving "plans" step → generate text
+    if (STEPS[currentStep].id === "plans" && client && user) {
+      const text = generateIntakeAssessmentText(client, `${user.firstName} ${user.lastName}`, "Metro Shelter Main", answers);
+      setGeneratedText(text);
+    }
+
     setCurrentStep(prev => Math.min(prev + 1, STEPS.length - 1));
   };
 
   const prevStep = () => setCurrentStep(prev => Math.max(prev - 1, 0));
+
+  const togglePlan = (planType: string) => {
+    setSelectedPlanTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(planType)) next.delete(planType);
+      else next.add(planType);
+      return next;
+    });
+  };
 
   const finalizeIntake = () => {
     const actor = getDemoActor();
@@ -101,21 +141,23 @@ export default function NewIntakeAssessmentPage() {
 
     setSaving(true);
     try {
+      // 1. Build client needs data from selected priority needs
       const clientNeedsData = answers.priorityNeeds?.map(needType => ({
-        needType: needType as any,
+        needType: needType as string,
         priority: "high" as const,
         status: "identified" as const,
-        recommendedNextAction: `Address ${needType.replace("_", " ")} identified during intake.`,
+        recommendedNextAction: `Address ${needType.replace(/_/g, " ")} identified during intake.`,
       })) || [];
 
+      // 2. Save the generated document
       const savedDoc = completeDemoGeneratedDocumentWorkflow({
         client,
         actor,
         documentType: "intake_assessment",
         title: `Intake Assessment - ${client.displayName}`,
         generatedText,
-        sourceAnswers: answers,
-        checklistUpdates: { 
+        sourceAnswers: answers as unknown as Record<string, unknown>,
+        checklistUpdates: {
           intakeCompleted: true,
           consentCompleted: answers.consentSigned || false,
           privacyExplained: answers.privacyExplained || false
@@ -127,11 +169,44 @@ export default function NewIntakeAssessmentPage() {
 
       setSavedDocId(savedDoc.id);
 
+      // 3. Apply orchestration — create needs, workstreams, timeline, audit
+      const existingNeeds = getDemoNeedsForClient(client.id);
+      const existingWorkstreams = getDemoWorkstreamsForClient(client.id);
+      const result = applyInitialAssessmentToClientFile({
+        client,
+        intakeAnswers: answers,
+        actor,
+        existingNeeds,
+        existingWorkstreams,
+      });
+
+      // Persist created needs
+      for (const need of result.createdNeeds) {
+        addDemoClientNeed(need);
+      }
+
+      // Persist created workstreams
+      for (const ws of result.createdWorkstreams) {
+        addDemoWorkstream(ws);
+      }
+
+      // Persist timeline + audit
+      addDemoTimelineItem(result.timelineItem);
+      addDemoAuditLog({
+        organizationId: result.auditLog.organizationId,
+        siteId: result.auditLog.siteId,
+        userId: result.auditLog.userId,
+        action: result.auditLog.action,
+        entityType: result.auditLog.entityType,
+        entityId: result.auditLog.entityId,
+        metadata: result.auditLog.metadata,
+      });
+
       // Clear draft
       window.localStorage.removeItem(storageKey);
 
-      toast.success("Intake Assessment saved to client file");
-      router.push(`/clients/${client.id}?tab=plans&success=intake_completed`);
+      toast.success("Intake Assessment saved — client needs and plans updated.");
+      router.push(`/clients/${client.id}?tab=overview&success=intake_completed`);
     } catch (err) {
       console.error(err);
       toast.error("Failed to save intake assessment");
@@ -149,10 +224,10 @@ export default function NewIntakeAssessmentPage() {
           <div className="space-y-6">
             <div className="p-4 bg-muted/30 rounded-lg space-y-4">
               <div className="flex items-start space-x-3">
-                <Checkbox 
-                  id="consent" 
-                  checked={answers.consentSigned} 
-                  onCheckedChange={v => setField("consentSigned", !!v)} 
+                <Checkbox
+                  id="consent"
+                  checked={answers.consentSigned}
+                  onCheckedChange={v => setField("consentSigned", !!v)}
                 />
                 <div className="space-y-1">
                   <Label htmlFor="consent" className="text-sm font-bold leading-none cursor-pointer">Signed Consent to Share Information</Label>
@@ -160,10 +235,10 @@ export default function NewIntakeAssessmentPage() {
                 </div>
               </div>
               <div className="flex items-start space-x-3">
-                <Checkbox 
-                  id="privacy" 
-                  checked={answers.privacyExplained} 
-                  onCheckedChange={v => setField("privacyExplained", !!v)} 
+                <Checkbox
+                  id="privacy"
+                  checked={answers.privacyExplained}
+                  onCheckedChange={v => setField("privacyExplained", !!v)}
                 />
                 <div className="space-y-1">
                   <Label htmlFor="privacy" className="text-sm font-bold leading-none cursor-pointer">Privacy Policy Explained</Label>
@@ -173,9 +248,9 @@ export default function NewIntakeAssessmentPage() {
             </div>
             <div className="space-y-2">
               <Label>Caseworker Observation (Optional)</Label>
-              <Textarea 
-                placeholder="Any immediate concerns or observations regarding the consent process?" 
-                value={answers.consentNotes || ""} 
+              <Textarea
+                placeholder="Any immediate concerns or observations regarding the consent process?"
+                value={answers.consentNotes || ""}
                 onChange={e => setField("consentNotes", e.target.value)}
               />
             </div>
@@ -230,9 +305,9 @@ export default function NewIntakeAssessmentPage() {
             </div>
             <div className="space-y-2">
               <Label>Last Stable Housing Address</Label>
-              <Textarea 
-                placeholder="Include city and province..." 
-                value={answers.lastStableHousing || ""} 
+              <Textarea
+                placeholder="Include city and province..."
+                value={answers.lastStableHousing || ""}
                 onChange={e => setField("lastStableHousing", e.target.value)}
               />
             </div>
@@ -256,14 +331,14 @@ export default function NewIntakeAssessmentPage() {
                 { id: "employment_education", label: "Employment / Education" }
               ].map(need => (
                 <div key={need.id} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
-                  <Checkbox 
-                    id={need.id} 
-                    checked={answers.priorityNeeds?.includes(need.id)} 
+                  <Checkbox
+                    id={need.id}
+                    checked={answers.priorityNeeds?.includes(need.id)}
                     onCheckedChange={v => {
                       const current = answers.priorityNeeds || [];
                       if (v) setField("priorityNeeds", [...current, need.id]);
-                      else setField("priorityNeeds", current.filter(id => id !== need.id));
-                    }} 
+                      else setField("priorityNeeds", current.filter(nid => nid !== need.id));
+                    }}
                   />
                   <Label htmlFor={need.id} className="text-sm font-medium leading-none cursor-pointer">{need.label}</Label>
                 </div>
@@ -275,6 +350,92 @@ export default function NewIntakeAssessmentPage() {
             </div>
           </div>
         );
+
+      // ── NEW: Recommended Casework Plans step ──
+      case "plans":
+        return (
+          <div className="space-y-5">
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-1">
+              <h4 className="font-bold text-primary flex items-center gap-2">
+                <ClipboardCheck className="h-5 w-5" /> Recommended Casework Plan
+              </h4>
+              <p className="text-sm text-muted-foreground">
+                Based on the needs identified, the system recommends the following plans.
+                Accept or unselect each plan. Accepted plans will appear as pending in the Client Work File.
+              </p>
+            </div>
+
+            {recommendedPlans.length === 0 && (
+              <p className="text-sm text-muted-foreground italic py-4">
+                No specific plans recommended beyond standard intake. Proceed to finalize.
+              </p>
+            )}
+
+            <div className="space-y-3">
+              {recommendedPlans.map((plan) => {
+                const selected = selectedPlanTypes.has(plan.type);
+                return (
+                  <div
+                    key={plan.type}
+                    className={cn(
+                      "border rounded-lg p-4 transition-all",
+                      selected
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-muted bg-muted/20 opacity-70"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 flex-1">
+                        <Checkbox
+                          checked={selected}
+                          onCheckedChange={() => togglePlan(plan.type)}
+                          className="mt-0.5"
+                        />
+                        <div className="space-y-1 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-sm">{plan.label}</p>
+                            <Badge
+                              variant={plan.priority === "high" ? "destructive" : "secondary"}
+                              className="text-[10px] uppercase"
+                            >
+                              {plan.priority}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{plan.reasonRequired}</p>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] uppercase whitespace-nowrap">
+                        {plan.status}
+                      </Badge>
+                    </div>
+
+                    {!selected && (
+                      <div className="mt-3 pl-7">
+                        <Input
+                          placeholder="Why is this plan not needed? (optional)"
+                          value={planNotes[plan.type] || ""}
+                          onChange={(e) => setPlanNotes(prev => ({ ...prev, [plan.type]: e.target.value }))}
+                          className="text-xs h-8"
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {recommendedPlans.length > 0 && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg p-3">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>
+                  {selectedPlanTypes.size} of {recommendedPlans.length} plan(s) selected.
+                  Accepted plans will appear as &quot;pending&quot; on the client work file.
+                </span>
+              </div>
+            )}
+          </div>
+        );
+
       case "finish":
         return (
           <div className="space-y-4">
@@ -286,20 +447,20 @@ export default function NewIntakeAssessmentPage() {
                 navigator.clipboard.writeText(generatedText);
                 setCopied(true);
                 toast.success("Copied for SMIS");
-                
+
                 const actor = getDemoActor();
                 if (actor && client && savedDocId) {
                   copyDemoDocumentToSmis(client.id, savedDocId, actor);
                 }
-                
+
                 setTimeout(() => setCopied(false), 2000);
               }}>
                 <ClipboardCopy className="h-4 w-4 mr-2" /> {copied ? "Copied!" : "Copy for SMIS"}
               </Button>
             </div>
-            <Textarea 
-              value={generatedText} 
-              readOnly 
+            <Textarea
+              value={generatedText}
+              readOnly
               className="min-h-[350px] font-mono text-[11px] leading-relaxed bg-slate-50 border-primary/10"
             />
             <div className="flex gap-3 pt-2">
@@ -333,18 +494,18 @@ export default function NewIntakeAssessmentPage() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-1 space-y-2">
             {STEPS.map((s, idx) => (
-              <div 
-                key={s.id} 
+              <div
+                key={s.id}
                 className={cn(
                   "p-3 rounded-lg border text-sm transition-all",
-                  idx === currentStep ? "bg-primary text-white border-primary shadow-md" : 
+                  idx === currentStep ? "bg-primary text-white border-primary shadow-md" :
                   idx < currentStep ? "bg-green-50 border-green-200 text-green-700" : "bg-muted/30 border-transparent text-muted-foreground"
                 )}
               >
                 <div className="flex items-center gap-2">
                   <div className={cn(
                     "h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold border",
-                    idx === currentStep ? "bg-white text-primary border-white" : 
+                    idx === currentStep ? "bg-white text-primary border-white" :
                     idx < currentStep ? "bg-green-600 text-white border-green-600" : "bg-muted text-muted-foreground border-muted-foreground/20"
                   )}>
                     {idx < currentStep ? <CheckCircle className="h-3 w-3" /> : idx + 1}
