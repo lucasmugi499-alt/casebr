@@ -6,13 +6,11 @@ import {
   WorkstreamType,
   DocumentationChecklist,
   ClientNeed,
-  TimelineItem,
   GeneratedDocument,
   Task,
   Referral,
   ClientStatus,
-  SupervisorReview,
-  CaseNote
+  GeneratedDocumentStatus
 } from "@/types";
 import { 
   upsertDemoGeneratedDocument, 
@@ -24,10 +22,10 @@ import {
   addDemoTask,
   addDemoReferral,
   updateDemoClient,
-  getDemoStore,
   addDemoSupervisorReview,
+  addDemoClientNeed,
   addDemoCaseNote,
-  updateDemoCaseNote
+  getDemoStore
 } from "./demoStore";
 
 export interface GeneratedDocumentWorkflowInput {
@@ -36,7 +34,7 @@ export interface GeneratedDocumentWorkflowInput {
   documentType: GeneratedDocumentType;
   title: string;
   generatedText: string;
-  sourceAnswers: Record<string, any>;
+  sourceAnswers: Record<string, unknown>;
   relatedNeedType?: ClientNeedType;
   relatedWorkstreamType?: WorkstreamType;
   checklistUpdates?: Partial<Omit<DocumentationChecklist, "clientId" | "updatedAt">>;
@@ -217,7 +215,7 @@ export const completeDemoGeneratedDocumentWorkflow = (input: GeneratedDocumentWo
       addDemoClientNeed({
         id: `need_${Date.now()}_${nd.needType}`,
         clientId: client.id,
-        needType: nd.needType as any,
+        needType: nd.needType as ClientNeedType,
         priority: nd.priority || "medium",
         status: nd.status || "identified",
         recommendedNextAction: nd.recommendedNextAction || `Address ${String(nd.needType).replace("_", " ")} identified during assessment.`,
@@ -354,7 +352,7 @@ export const copyDemoDocumentToSmis = (
 
   const updatedDoc = {
     ...doc,
-    status: "copied_to_smis" as any,
+    status: "copied_to_smis" as GeneratedDocumentStatus,
     copiedToSmisAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };

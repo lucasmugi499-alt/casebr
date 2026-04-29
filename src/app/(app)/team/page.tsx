@@ -29,7 +29,8 @@ import {
   AlertCircle,
   MapPin,
   Calendar,
-  Target
+  Target,
+  User
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -38,6 +39,17 @@ import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CardFooter } from "@/components/ui/card";
+import { 
+  SupervisorOperationalBoard, 
+  AttentionQueueItem, 
+  StaffWorkloadItem, 
+  RiskQueueItem, 
+  SafetyReviewItem, 
+  DocumentationGapItem, 
+  RecentActivityItem,
+  Client,
+  User as UserType
+} from "@/types";
 
 export default function SupervisorCommandCentrePage({ initialTab }: { initialTab?: string }) {
   const { user } = useAuth();
@@ -45,7 +57,7 @@ export default function SupervisorCommandCentrePage({ initialTab }: { initialTab
   const searchParams = useSearchParams();
   const defaultTab = initialTab || searchParams.get("tab") || "overview";
   
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<SupervisorOperationalBoard | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(defaultTab);
 
@@ -163,7 +175,7 @@ export default function SupervisorCommandCentrePage({ initialTab }: { initialTab
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="divide-y">
-                    {attentionQueue.slice(0, 5).map((item: any) => (
+                    {attentionQueue.slice(0, 5).map((item: AttentionQueueItem) => (
                       <div key={item.client.id} className="p-4 flex items-center justify-between hover:bg-muted/5 transition-colors">
                         <div className="space-y-1">
                           <p className="text-sm font-bold">{item.client.displayName}</p>
@@ -195,7 +207,7 @@ export default function SupervisorCommandCentrePage({ initialTab }: { initialTab
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="divide-y">
-                    {staffWorkload.slice(0, 5).map((item: any) => (
+                    {staffWorkload.slice(0, 5).map((item: StaffWorkloadItem) => (
                       <div key={item.worker.id} className="p-4 flex items-center justify-between hover:bg-muted/5 transition-colors">
                         <div className="space-y-1">
                           <p className="text-sm font-bold">{item.worker.firstName} {item.worker.lastName}</p>
@@ -234,7 +246,7 @@ export default function SupervisorCommandCentrePage({ initialTab }: { initialTab
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y">
-                  {recentActivity.slice(0, 6).map((log: any) => (
+                  {recentActivity.slice(0, 6).map((log: RecentActivityItem) => (
                     <div key={log.id} className="p-3 px-4 flex items-center justify-between hover:bg-muted/5">
                       <div className="flex items-center gap-3">
                         <div className="bg-muted rounded-full p-1.5">
@@ -267,7 +279,7 @@ export default function SupervisorCommandCentrePage({ initialTab }: { initialTab
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y">
-                  {unassignedClients.length > 0 ? unassignedClients.map((client: any) => (
+                  {unassignedClients.length > 0 ? unassignedClients.map((client: Client) => (
                     <div key={client.id} className="p-4 hover:bg-muted/5 transition-colors">
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="space-y-2 flex-1">
@@ -308,7 +320,7 @@ export default function SupervisorCommandCentrePage({ initialTab }: { initialTab
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y">
-                  {attentionQueue.length > 0 ? attentionQueue.map((item: any) => (
+                  {attentionQueue.length > 0 ? attentionQueue.map((item: AttentionQueueItem) => (
                     <div key={item.client.id} className="p-4 hover:bg-muted/5 transition-colors">
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="space-y-2 flex-1">
@@ -344,7 +356,7 @@ export default function SupervisorCommandCentrePage({ initialTab }: { initialTab
           {/* WORKLOAD TAB */}
           <TabsContent value="workload" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {staffWorkload.map((item: any) => (
+              {staffWorkload.map((item: StaffWorkloadItem) => (
                 <StaffWorkloadCard key={item.worker.id} item={item} />
               ))}
             </div>
@@ -362,7 +374,7 @@ export default function SupervisorCommandCentrePage({ initialTab }: { initialTab
                   {riskQueue.length === 0 && safetyReviews.length === 0 && (
                     <div className="p-12 text-center text-muted-foreground italic">No risk or safety reviews pending.</div>
                   )}
-                  {riskQueue.map((item: any) => (
+                  {riskQueue.map((item: RiskQueueItem) => (
                     <div key={item.risk.id} className="p-4 hover:bg-muted/5 transition-colors">
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-2">
@@ -384,7 +396,7 @@ export default function SupervisorCommandCentrePage({ initialTab }: { initialTab
                       </div>
                     </div>
                   ))}
-                  {safetyReviews.map((item: any) => (
+                  {safetyReviews.map((item: SafetyReviewItem) => (
                     <div key={item.doc.id} className="p-4 hover:bg-muted/5 transition-colors">
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-2">
@@ -419,7 +431,7 @@ export default function SupervisorCommandCentrePage({ initialTab }: { initialTab
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y">
-                  {documentationGaps.length > 0 ? documentationGaps.map((item: any) => (
+                  {documentationGaps.length > 0 ? documentationGaps.map((item: DocumentationGapItem) => (
                     <div key={item.client.id} className="p-4 hover:bg-muted/5 transition-colors">
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="space-y-2 flex-1">
@@ -477,7 +489,7 @@ export default function SupervisorCommandCentrePage({ initialTab }: { initialTab
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y">
-                  {recentActivity.map((log: any) => (
+                  {recentActivity.map((log: RecentActivityItem) => (
                     <div key={log.id} className="p-4 flex items-start gap-4 hover:bg-muted/5 transition-colors">
                       <div className="bg-muted rounded-full p-2 mt-1">
                         <Activity className="h-4 w-4 text-muted-foreground" />
@@ -534,7 +546,7 @@ function SummaryCard({ title, value, icon, status = "default", onClick }: { titl
   );
 }
 
-function StaffWorkloadCard({ item }: { item: any }) {
+function StaffWorkloadCard({ item }: { item: StaffWorkloadItem }) {
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-all group">
       <CardHeader className={cn(
@@ -594,7 +606,7 @@ function StaffWorkloadCard({ item }: { item: any }) {
   );
 }
 
-function AssignmentAction({ client, caseworkers, onAssigned }: { client: any; caseworkers: any[]; onAssigned: () => void }) {
+function AssignmentAction({ client, caseworkers, onAssigned }: { client: Client; caseworkers: UserType[]; onAssigned: () => void }) {
   const [open, setOpen] = useState(false);
   const [selectedWorkers, setSelectedWorkers] = useState<string[]>([]);
   const [note, setNote] = useState("");

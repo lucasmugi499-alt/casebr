@@ -469,7 +469,7 @@ export const assignDemoClient = (
     addDemoTimelineItem({
       id: `assign_${Date.now()}`,
       clientId: clientId,
-      type: "assignment" as any,
+      type: "assignment",
       date: new Date().toISOString(),
       title: "Client Assigned",
       summary: note || `Client assigned to ${workerIds.length} worker(s).`,

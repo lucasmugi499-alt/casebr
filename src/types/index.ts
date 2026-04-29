@@ -439,3 +439,68 @@ export interface DocumentChecklist {
   other: DocumentChecklistStatus;
   updatedAt: string;
 }
+
+export interface AttentionQueueItem {
+  client: Client;
+  assignedWorkers: User[];
+  reasons: string[];
+  lastContactAt?: string;
+  priority: Priority;
+  riskLevel: 'high' | 'normal';
+  gapCount: number;
+}
+
+export interface StaffWorkloadItem {
+  worker: User;
+  clientCount: number;
+  highPriorityCount: number;
+  overdueCount: number;
+  notesThisWeek: number;
+  pendingReferrals: number;
+  workloadStatus: 'balanced' | 'high' | 'overloaded' | 'support_needed' | 'low_activity';
+  lastActivity: string;
+}
+
+export interface RiskQueueItem {
+  risk: RiskFlag;
+  client?: Client;
+  worker?: User;
+}
+
+export interface SafetyReviewItem {
+  doc: GeneratedDocument;
+  client?: Client;
+  worker?: User;
+}
+
+export interface DocumentationGapItem {
+  client: Client;
+  assignedWorkers: User[];
+  gaps: string[];
+  status: ClientStatus;
+}
+
+export interface RecentActivityItem extends AuditLog {
+  user?: User;
+  client?: Client;
+}
+
+export interface SupervisorOperationalBoard {
+  summary: {
+    unassignedCount: number;
+    activeClients: number;
+    activeCaseworkers: number;
+    overdueTasks: number;
+    riskReviewsRequired: number;
+    documentationGaps: number;
+    noContact7Days: number;
+  };
+  unassignedClients: Client[];
+  attentionQueue: AttentionQueueItem[];
+  staffWorkload: StaffWorkloadItem[];
+  riskQueue: RiskQueueItem[];
+  safetyReviews: SafetyReviewItem[];
+  documentationGaps: DocumentationGapItem[];
+  recentActivity: RecentActivityItem[];
+  caseworkers: User[];
+}

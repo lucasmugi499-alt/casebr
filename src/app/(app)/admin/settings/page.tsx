@@ -38,13 +38,13 @@ export default function OrganizationSettingsPage() {
     setLoading(false);
   }, []);
 
-  const handleUpdate = (path: string, value: any) => {
+  const handleUpdate = (path: string, value: string | number | boolean) => {
     if (!org) return;
     
     // Simple path updater for organization settings
     const keys = path.split('.');
     const newOrg = { ...org };
-    let current: any = newOrg;
+    let current: Record<string, any> = newOrg;
     
     for (let i = 0; i < keys.length - 1; i++) {
       current[keys[i]] = { ...current[keys[i]] };

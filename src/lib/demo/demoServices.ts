@@ -470,11 +470,11 @@ export const getDemoManagementDashboard = (_actor: ServiceActor) => {
       activeClients: activeClients.length,
       housedMTD: clients.filter(c => c.status === "housed" && c.updatedAt >= mtdStr).length,
     },
-    clientNeedsBreakdown: store.clientNeeds.reduce((acc: any, need) => {
+    clientNeedsBreakdown: store.clientNeeds.reduce((acc: Record<string, number>, need) => {
       acc[need.needType] = (acc[need.needType] || 0) + 1;
       return acc;
     }, {}),
-    workstreamStatusBreakdown: store.workstreams.reduce((acc: any, ws) => {
+    workstreamStatusBreakdown: store.workstreams.reduce((acc: Record<string, number>, ws) => {
       acc[ws.status] = (acc[ws.status] || 0) + 1;
       return acc;
     }, {}),
@@ -488,7 +488,7 @@ export const getDemoManagementDashboard = (_actor: ServiceActor) => {
       transferred: clients.filter(c => c.status === "transferred").length,
       discharged: clients.filter(c => c.status === "discharged").length,
     },
-    referralOutcomes: referrals.reduce((acc: any, ref) => {
+    referralOutcomes: referrals.reduce((acc: Record<string, number>, ref) => {
       acc[ref.status] = (acc[ref.status] || 0) + 1;
       return acc;
     }, {}),
