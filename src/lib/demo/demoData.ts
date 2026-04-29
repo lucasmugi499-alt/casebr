@@ -8,6 +8,7 @@ import {
   GeneratedDocument,
   Organization,
   Referral,
+  ReferralType,
   RiskFlag,
   SafetyPlan,
   Site,
@@ -101,7 +102,7 @@ export const demoTasks: Task[] = Array.from({ length: 20 }, (_, i) => {
 
 export const demoReferrals: Referral[] = Array.from({ length: 15 }, (_, i) => {
   const client = demoClients[i % demoClients.length];
-  const types = ["housing", "income_support", "id_replacement", "mental_health", "substance_use_support", "medical", "legal", "employment"];
+  const types: ReferralType[] = ["housing", "income", "other", "mental_health", "substance_use", "medical", "legal", "employment"];
   const statuses: Referral["status"][] = ["pending", "completed", "no_response", "pending", "declined"];
   return { id: `referral_${i + 1}`, organizationId: demoOrganization.id, siteId: client.siteId, clientId: client.id, createdById: client.assignedWorkerIds[0], referralType: types[i % types.length], agencyName: ["Metro Housing Access", "City Income Desk", "ID Clinic", "Community Health Collective"][i % 4], contactPerson: ["J. Brooks", "R. Gomez", "S. Turner", "L. Shah"][i % 4], contactInfo: "demo-agency@local.org", referralDate: isoDaysAgo((i % 20) + 1), status: statuses[i % statuses.length], followUpDate: isoDaysFromNow((i % 5) - 1), outcome: statuses[i % statuses.length] === "completed" ? "Connected to service intake." : undefined, createdAt: isoDaysAgo((i % 20) + 1), updatedAt: isoDaysAgo(i % 8) };
 });
@@ -163,8 +164,11 @@ export const demoDocumentationChecklists: DocumentationChecklist[] = demoClients
   consentCompleted: index % 4 !== 0,
   privacyExplained: true,
   servicePlanStarted: index % 2 === 0,
+  servicePlanCompleted: index % 4 === 0,
   housingPlanStarted: index % 3 === 0,
+  housingPlanCompleted: index % 5 === 0,
   safetyScreeningCompleted: index % 5 !== 0,
+  safetyPlanCompleted: index % 6 === 0,
   idStatusDocumented: index % 3 !== 1,
   incomeStatusDocumented: index % 4 !== 1,
   emergencyContactDocumented: index % 5 !== 2,

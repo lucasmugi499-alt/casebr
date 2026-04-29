@@ -115,7 +115,7 @@ export default function NewTaskPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="client">Related Client <span className="text-destructive">*</span></Label>
-                <Select value={formData.clientId} onValueChange={v => setFormData({...formData, clientId: v})}>
+                <Select value={formData.clientId} onValueChange={v => setFormData({...formData, clientId: v ?? ""})}>
                   <SelectTrigger id="client">
                     <SelectValue placeholder="Select client" />
                   </SelectTrigger>
@@ -139,7 +139,7 @@ export default function NewTaskPage() {
 
             <div className="space-y-2">
               <Label htmlFor="priority">Priority</Label>
-              <Select value={formData.priority} onValueChange={v => setFormData({...formData, priority: v as any})}>
+              <Select value={formData.priority} onValueChange={v => setFormData({...formData, priority: (v ?? "medium") as any})}>
                 <SelectTrigger id="priority">
                   <SelectValue />
                 </SelectTrigger>

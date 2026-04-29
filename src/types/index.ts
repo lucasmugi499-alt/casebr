@@ -413,6 +413,7 @@ export interface DocumentationChecklist {
   servicePlanStarted: boolean;
   servicePlanCompleted: boolean;
   housingPlanStarted: boolean;
+  housingPlanCompleted: boolean;
   safetyScreeningCompleted: boolean;
   safetyPlanCompleted: boolean;
   idStatusDocumented: boolean;
